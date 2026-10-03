@@ -158,6 +158,28 @@ input[type="search"]:focus, input[type="date"]:focus { border-color: #9ec5f4; bo
 .zoom-btns button { width: 32px; height: 32px; border-radius: 12px; border: 1px solid var(--ring); background: var(--surface);
   color: var(--ink-2); cursor: pointer; font-size: 16px; line-height: 1; box-shadow: var(--sombra); }
 .zoom-btns button:hover { color: var(--ink); border-color: var(--axis); }
+.trilha { position: absolute; left: 10px; top: 10px; right: 56px; z-index: 2; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; pointer-events: none; }
+.trilha > * { pointer-events: auto; }
+.trilha .voltar { border: 0; background: var(--ink); color: #fff; font-weight: 800; font-size: 13.5px; padding: 8px 14px; border-radius: 999px;
+  cursor: pointer; box-shadow: var(--sombra); }
+.trilha .passo { background: var(--surface); border: 1px solid var(--ring); border-radius: 999px; padding: 6px 12px; font-weight: 800;
+  font-size: 13px; color: var(--ink); box-shadow: var(--sombra); max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+button.passo { cursor: pointer; color: var(--sky-ink); }
+.trilha .sep { color: var(--ink-2); font-weight: 800; }
+.trilha .dica-mapa { background: rgba(255,255,255,.88); border-radius: 999px; padding: 5px 12px; font-size: 12.5px; font-weight: 700; color: var(--ink-2); pointer-events: none; }
+.lado { display: flex; flex-direction: column; min-height: 0; }
+.lado h3 { font-family: "Fredoka"; font-size: 14.5px; font-weight: 600; margin: 14px 0 6px; }
+.chips { display: flex; gap: 6px; flex-wrap: wrap; }
+.chip { border: 1px solid var(--ring); background: var(--page); border-radius: 999px; padding: 5px 11px; font-size: 13px; cursor: pointer; }
+.chip:hover { border-color: var(--axis); background: var(--sky); }
+.chip b { color: var(--ink-2); }
+.rounds-lista { display: grid; gap: 2px; max-height: 340px; overflow-y: auto; }
+.rl { display: grid; grid-template-columns: 18px 1fr auto; gap: 8px; align-items: center; text-align: left; border: 0; background: transparent;
+  padding: 7px 8px; border-radius: 10px; cursor: pointer; font-size: 13px; }
+.rl:hover { background: var(--page); }
+.rl .t small { display: block; color: var(--muted); font-size: 11.5px; }
+.rl .k { color: var(--ink-2); font-size: 12px; }
+@media (min-width: 761px) { #folha { left: auto !important; right: 24px !important; bottom: 24px !important; width: 380px !important; } }
 .rosa { position: absolute; left: 10px; bottom: 8px; width: 56px; height: 56px; pointer-events: none; opacity: .85; }
 
 .partidas { display: flex; flex-direction: column; min-height: 0; }
@@ -197,7 +219,7 @@ input[type="search"]:focus, input[type="date"]:focus { border-color: #9ec5f4; bo
 .etiqueta { font-size: 12px; font-weight: 700; padding: 3px 10px; border-radius: 999px; background: var(--page); color: var(--ink-2); border: 1px solid var(--ring); }
 .navega { margin-left: auto; display: flex; gap: 6px; }
 .resumo-partida { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; margin: 14px 0; }
-.resumo-partida div { background: var(--page); border-radius: 14px; padding: 10px 12px; }
+.resumo-partida > div { background: var(--page); border-radius: 14px; padding: 10px 12px; }
 .resumo-partida .r { font-size: 12px; color: var(--muted); font-weight: 700; }
 .resumo-partida .v { font-family: "Fredoka"; font-size: 20px; font-weight: 600; }
 
@@ -312,6 +334,7 @@ tr.clicavel { cursor: pointer; }
   .rosa { width: 42px; height: 42px; }
   .zoom-btns button { width: 38px; height: 38px; }
   .lista-partidas { max-height: 380px; }
+  .trilha .voltar { padding: 9px 15px; }
   .abas { display: flex; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
   .aba { flex: none; padding: 7px 12px; font-size: 14px; }
   #pop { left: 10px !important; right: 10px; width: auto; }
@@ -351,28 +374,17 @@ tr.clicavel { cursor: pointer; }
       <div class="card">
         <div class="mapa-partidas">
           <div>
-            <div class="cab-card">
-              <div><h2>Onde foram os rounds</h2><div class="sub" id="mapa-sub"></div></div>
-            </div>
+            <div class="cab-card"><div><h2 id="mapa-titulo">Seu mundo</h2><div class="sub" id="mapa-sub"></div></div></div>
             <div class="barra-mapa">
               <div class="segmento" id="camada">
-                <button data-v="rounds">Rounds</button><button data-v="paises">Acerto por país</button></div>
+                <button data-v="paises">Países</button><button data-v="pontos">Todos os pontos</button></div>
               <div class="segmento" id="linhas">
-                <button data-v="sim">Com linhas</button><button data-v="nao">Só pontos</button></div>
+                <button data-v="sim">Com linhas</button><button data-v="nao">Sem linhas</button></div>
               <div class="legenda" id="legenda-mapa"></div>
             </div>
-            <div class="mapa" id="mapa"></div>
+            <div class="mapa" id="mapa"><div class="trilha" id="trilha"></div></div>
           </div>
-          <div class="partidas">
-            <div class="cab-card"><h2>Partidas</h2><span class="sub" id="partidas-sub"></span></div>
-            <div class="dica">Clique para ver só ela no mapa. Shift seleciona um intervalo.</div>
-            <div class="busca-linha">
-              <input type="search" id="partidas-busca" placeholder="Buscar mapa, país, data">
-              <button class="btn link" id="sel-visiveis">Todas</button>
-              <button class="btn link" id="sel-limpar">Limpar</button>
-            </div>
-            <div class="lista-partidas" id="lista-partidas" role="listbox" aria-multiselectable="true"></div>
-          </div>
+          <div class="lado" id="lado-mapa"></div>
         </div>
       </div>
       <div class="descobertas" id="descobertas"></div>
@@ -576,7 +588,10 @@ function estadoInicial() {
   return e;
 }
 let estado = estadoInicial();
-const ui = { pagina: "mapa", aba: "confusoes", aberta: null, camada: "rounds", linhas: "sim", ordemPaises: "perdidos",
+// O mapa tem três níveis: mundo, um país, ou partidas. Cada nível tem endereço próprio (#mapa/pais/Canadá),
+// então o voltar do navegador e do celular sobe um nível.
+const ui = { pagina: "mapa", aba: "confusoes", aberta: null, camada: "paises", linhas: "nao", ordemPaises: "perdidos",
+  mapa: { vista: "mundo", pais: null }, buscaMapa: "",
   ordemRounds: { col: 0, dir: -1 } };
 const ativo = k => estado[k].size < FILTRO[k].opcoes.length;
 
@@ -584,7 +599,7 @@ const CHAVE = "geoguessr-track-v2";
 function salvar() {
   try {
     const s = { periodo: estado.periodo, de: estado.de, ate: estado.ate,
-      camada: ui.camada, linhas: ui.linhas, ordemPaises: ui.ordemPaises };
+      camada2: ui.camada, linhas2: ui.linhas, ordemPaises: ui.ordemPaises };
     for (const f of FILTROS) s["fora_" + f.k] = f.opcoes.filter(v => !estado[f.k].has(v));
     localStorage.setItem(CHAVE, JSON.stringify(s));
   } catch (e) { }
@@ -598,7 +613,9 @@ function carregar() {
     for (const f of FILTROS) { const fora = new Set(s["fora_" + f.k] || []); e[f.k] = new Set(f.opcoes.filter(v => !fora.has(v)));
       if (!e[f.k].size && f.minimo) e[f.k] = new Set(f.opcoes); }
     estado = e;
-    ui.camada = s.camada || ui.camada; ui.linhas = s.linhas || ui.linhas; ui.ordemPaises = s.ordemPaises || ui.ordemPaises;
+    if (["paises", "pontos"].includes(s.camada2)) ui.camada = s.camada2;
+    if (["sim", "nao"].includes(s.linhas2)) ui.linhas = s.linhas2;
+    ui.ordemPaises = s.ordemPaises || ui.ordemPaises;
   } catch (e) { }
 }
 carregar();
@@ -607,9 +624,6 @@ carregar();
 // Mapas regionais (Europa, Sudeste Asiático) não entram, porque espalham entre vários países.
 const mapaDePais = new Set(d3.rollups(rounds, v => d3.max(d3.rollup(v, x => x.length, r => r.pais).values()) / v.length, r => r.mapa)
   .filter(([, f]) => f >= 0.8).map(([m]) => m));
-// O mapa abre nas 5 partidas mais recentes fora desses mapas, para não começar com 1.700 pontos.
-const ultimas5 = ps => ps.filter(p => !mapaDePais.has(p.mapa)).slice(0, 5).map(p => p.id);
-const ehPadrao = () => { const u = ultimas5(partidasFiltradas()); return u.length > 0 && u.length === estado.sel.size && u.every(id => estado.sel.has(id)); };
 
 function limitesPeriodo() {
   if (estado.periodo === "custom") return [estado.de || null, estado.ate || null];
@@ -679,20 +693,7 @@ function desenharFiltros(ps) {
   const algum = estado.periodo !== "tudo" || FILTROS.some(f => ativo(f.k));
   if (algum) { const l = document.createElement("button"); l.className = "btn link"; l.textContent = "Limpar filtros";
     l.onclick = () => { const sel = estado.sel; estado = estadoInicial(); estado.sel = sel; atualizar(); }; el.appendChild(l); }
-  if (estado.sel.size && ui.pagina === "mapa") {
-    const visiveis = ps.filter(p => estado.sel.has(p.id)).length;
-    const s = document.createElement("span"); s.className = "chip-sel";
-    s.textContent = ehPadrao() ? `Últimas ${visiveis} partidas em mapas mundiais` :
-      `${visiveis} partida${visiveis !== 1 ? "s" : ""} selecionada${visiveis !== 1 ? "s" : ""}` +
-      (visiveis < estado.sel.size ? ` (${estado.sel.size - visiveis} fora do filtro)` : "");
-    const x = document.createElement("button"); x.textContent = "×"; x.title = "Ver todas as partidas";
-    x.onclick = () => { estado.sel.clear(); atualizar(); };
-    s.appendChild(x); el.appendChild(s);
-  }
-  if (ui.pagina === "mapa" && (!estado.sel.size || !ehPadrao())) { const u = document.createElement("button"); u.className = "btn link";
-    u.textContent = "Ver últimas 5"; u.title = "As 5 partidas mais recentes em mapas que não são de um país só";
-    u.onclick = () => { estado.sel = new Set(ultimas5(partidasFiltradas())); atualizar(); }; el.appendChild(u); }
-  if (!algum && !estado.sel.size) { const d = document.createElement("span"); d.className = "dica";
+  if (!algum) { const d = document.createElement("span"); d.className = "dica";
     d.textContent = "Clique num filtro para escolher. O × tira o filtro."; el.appendChild(d); }
 }
 
@@ -824,58 +825,76 @@ function zoomBtns(el) {
   const rosa = document.createElement("span"); rosa.className = "rosa"; rosa.innerHTML = doodle("rosa"); el.appendChild(rosa);
 }
 
+// Cores da camada Países: divergente de laranja (erra muito) a azul (acerta muito), cinza no meio.
+// Mesmas cores dos pontos de erro e acerto. País com menos de 3 rounds fica mais claro.
+const DIVERG = [[0.2, "#e8702f", "até 20%"], [0.4, "#f4ad86", "20 a 40%"], [0.6, "#dcd8cf", "40 a 60%"], [0.8, "#8ab6ec", "60 a 80%"], [1.01, "#2a78d6", "80% ou mais"]];
+const corDiverg = p => DIVERG.find(([lim]) => p < lim)[1];
+
+// Navegação do mapa. Tudo passa pelo endereço, para o voltar funcionar.
+const hashMapa = (pais, ids) => "#mapa" + (pais ? "/pais/" + encodeURIComponent(pais) : "") + (ids && ids.length ? "/partida/" + ids.join(",") : "");
+const irMundo = () => { location.hash = "#mapa"; };
+const irPais = nome => { location.hash = hashMapa(nome); };
+const irPartida = (ids, pais) => { location.hash = hashMapa(pais === undefined ? (ui.pagina === "mapa" ? ui.mapa.pais : null) : pais, ids); };
+
+// Toque ou clique curto, sem arrastar. O zoom do d3 engole o "click" depois de qualquer movimento,
+// e no celular o tooltip ficava preso; por isso o toque é medido aqui, entre o apertar e o soltar.
+function tocavel(sel, fn) {
+  sel.on("pointerdown.toque", function (ev) { this._t = [ev.clientX, ev.clientY, Date.now()]; })
+    .on("pointerup.toque", function (ev, d) { const t = this._t; this._t = null;
+      if (t && Math.hypot(ev.clientX - t[0], ev.clientY - t[1]) < 8 && Date.now() - t[2] < 700) { esconder(); fn(ev, d); } });
+}
+const soMouse = fn => (ev, d) => { if (ev.pointerType === "mouse") fn(ev, d); };
+
 const elFolha = document.getElementById("folha");
-function folha(r, o) {
+function folha(r) {
   elFolha.innerHTML = `<button class="fechar" aria-label="Fechar">×</button>
     <div class="f1">${esc(r.pais)}${r.regiao ? " (" + r.regiao + ")" : ""}</div>
     <div class="${r.acertou ? "ok" : "no"}">${r.acertou ? "✓" : "✗"} palpite: ${esc(r.ppais || NA)}${r.pregiao ? " (" + r.pregiao + ")" : ""}</div>
     <div>${r.km != null ? f0(r.km) + " km · " : ""}${f0(r.pontos)} pontos</div>
     <div class="sub">${esc(r.nome)} · round ${r.round} · ${esc(r.mapa)}</div>
     <div class="acoes"></div>`;
-  const ac = elFolha.querySelector(".acoes");
-  const so = estado.sel.has(r.id) && estado.sel.size === 1;
-  if (o.aoClicar) { const b = document.createElement("button"); b.className = "btn primario";
-    b.textContent = so ? "Voltar a todas" : "Ver só esta partida";
-    b.onclick = () => { fecharFolha(); if (so) estado.sel.clear(); else estado.sel = new Set([r.id]); atualizar(); };
-    ac.appendChild(b); }
-  if (ui.pagina !== "partidas" || ui.aberta !== r.id) { const b = document.createElement("button"); b.className = "btn"; b.textContent = "Abrir partida";
-    b.onclick = () => { fecharFolha(); ui.aberta = r.id; location.hash = "#partidas/" + r.id; }; ac.appendChild(b); }
+  const ac = elFolha.querySelector(".acoes"), noMapa = ui.pagina === "mapa", v = ui.mapa;
+  const botao = (txt, fn, primario) => { const b = document.createElement("button"); b.className = "btn" + (primario ? " primario" : "");
+    b.textContent = txt; b.onclick = () => { fecharFolha(); fn(); }; ac.appendChild(b); };
+  if (!(noMapa && v.vista === "partidas" && estado.sel.size === 1 && estado.sel.has(r.id))) botao("Ver esta partida", () => irPartida([r.id], noMapa ? v.pais : null), true);
+  if (!(noMapa && v.pais === r.pais)) botao(`Ver ${r.pais}`, () => irPais(r.pais));
+  if (!(ui.pagina === "partidas" && ui.aberta === r.id)) botao("Abrir em Partidas", () => { ui.aberta = r.id; location.hash = "#partidas/" + r.id; });
   elFolha.querySelector(".fechar").onclick = fecharFolha;
   elFolha.classList.add("aberta");
 }
 function fecharFolha() { elFolha.classList.remove("aberta"); }
 
+// o.camada: "paises" (países pintados) ou "pontos". o.palpites: anel e linha forte até o palpite.
+// o.linhas: linhas leves no mundo. o.enquadrar: pontos [lng, lat] para enquadrar. o.destaque: país em foco.
 function desenharMapa(el, rs, o) {
   zoomBtns(el);
   el.querySelectorAll("svg.mundo").forEach(s => s.remove());
-  const focado = o.focado && rs.length > 0, enquadrar = (o.focado || o.enquadrar) && rs.length > 0;
   // O desenho usa a largura real em pixels, para os pontos terem o mesmo tamanho em qualquer tela.
   // Em tela estreita o mapa fica mais alto e o mundo preenche a altura; arrasta-se para os lados.
   const W = Math.max(300, Math.round(el.clientWidth || 1000)), estreito = W < 640;
-  let H = Math.round(W * (estreito ? 1 : 0.52));
+  let H = Math.round(W * (estreito ? 0.9 : 0.52));
   const mundoInteiro = estreito ? [[-W, 4], [2 * W, H - 4]] : [[4, 4], [W - 4, H - 4]];
   const proj = d3.geoNaturalEarth1().fitExtent(mundoInteiro, { type: "Sphere" });
-  if (enquadrar) {
-    // Enquadra locais e palpites, sem passar de 12 vezes o mundo.
-    // Com filtro de país, só os locais contam; palpite do outro lado do mundo não abre a moldura.
-    const pts = rs.flatMap(r => [[r.lng, r.lat], ...(focado && r.plat != null ? [[r.plng, r.plat]] : [])]);
+  const pts = o.enquadrar && o.enquadrar.length ? o.enquadrar : null;
+  if (pts) {
+    // Enquadra os pontos, sem passar de 12 vezes o mundo.
     const s0 = proj.scale(), sMin = d3.geoNaturalEarth1().fitExtent([[4, 4], [W - 4, H - 4]], { type: "Sphere" }).scale();
-    const m = estreito ? 30 : 50;
+    const m = estreito ? 34 : 56;
     proj.fitExtent([[m, m], [W - m, H - m]], { type: "MultiPoint", coordinates: pts });
     if (estreito) {
       // No celular a altura do quadro acompanha a altura que os pontos ocupam, sem mar sobrando.
       const ys = pts.map(q => proj(q)[1]), alto = d3.max(ys) - d3.min(ys);
-      H = Math.round(Math.max(W * 0.56, Math.min(W, alto + 2 * m)));
+      H = Math.round(Math.max(W * 0.6, Math.min(W, alto + 2 * m)));
       proj.fitExtent([[m, m], [W - m, H - m]], { type: "MultiPoint", coordinates: pts });
     }
     if (proj.scale() > s0 * 12) { const c = proj.invert([W / 2, H / 2]); proj.scale(s0 * 12).center([0, 0]).translate([W / 2, H / 2]);
       const [x, y] = proj(c); const t = proj.translate(); proj.translate([t[0] + W / 2 - x, t[1] + H / 2 - y]); }
-    // Partidas espalhadas pelo mundo: no celular cabe o mundo todo na largura, sem cortar as pontas.
+    // Pontos espalhados pelo mundo: no celular cabe o mundo todo na largura, sem cortar as pontas.
     if (proj.scale() < sMin) { if (estreito) H = Math.round(W * 0.56); proj.fitExtent([[4, 4], [W - 4, H - 4]], { type: "Sphere" }); }
   }
   const path = d3.geoPath(proj);
   const svg = d3.select(el).insert("svg", ".zoom-btns").attr("class", "mundo").attr("viewBox", `0 0 ${W} ${H}`);
-  if (!el._zoom) el._zoom = d3.zoom().scaleExtent([1, 40]);
+  if (!el._zoom) el._zoom = d3.zoom().scaleExtent([1, 40]).clickDistance(8);
   el._zoom.translateExtent([[-W, -H], [2 * W, 2 * H]]);
   el._svg = svg;
   svg.append("rect").attr("width", W).attr("height", H).attr("fill", "var(--sea)");
@@ -886,43 +905,45 @@ function desenharMapa(el, rs, o) {
   const stats = new Map();
   if (paises) for (const r of rs) if (r.feat != null) { const s = stats.get(r.feat) || { n: 0, ok: 0, perdidos: 0 };
     s.n++; s.ok += r.acertou; s.perdidos += 5000 - r.pontos; stats.set(r.feat, s); }
-  const terra = g.append("g").selectAll("path").data(mundo ? mundo.features : []).join("path")
-    .attr("d", path).attr("fill", (f, i) => paises && stats.has(i) ? corAcerto(stats.get(i).ok / stats.get(i).n) : "var(--land)")
-    .attr("stroke", paises ? "#fff" : "var(--land-borda)").attr("stroke-width", paises ? 1 : 0.7)
+  const fs = mundo ? mundo.features : [];
+  const terra = g.append("g").selectAll("path").data(fs).join("path").attr("d", path)
+    .attr("fill", (f, i) => paises && stats.has(i) ? corDiverg(stats.get(i).ok / stats.get(i).n) : i === o.destaque ? "#dbe9f8" : "var(--land)")
+    .attr("fill-opacity", (f, i) => paises && stats.has(i) && stats.get(i).n < 3 ? 0.5 : 1)
+    .attr("stroke", (f, i) => i === o.destaque ? "var(--ok)" : paises ? "#fff" : "var(--land-borda)")
+    .attr("stroke-width", (f, i) => i === o.destaque ? 1.6 : paises ? 1 : 0.7)
     .attr("vector-effect", "non-scaling-stroke");
   if (paises) {
     terra.style("cursor", (f, i) => stats.has(i) ? "pointer" : "default")
-      .on("pointermove", (ev, f) => { const i = mundo.features.indexOf(f), s = stats.get(i); if (!s) { esconder(); return; }
+      .on("pointermove", soMouse((ev, f) => { const i = fs.indexOf(f), s = stats.get(i); if (!s) { esconder(); return; }
         mostrar(ev, [[nomeFeat.get(i) || f.properties.name], [`${fpct(s.ok / s.n)} de acerto de país`],
-          [`${s.ok} de ${s.n} rounds · ${f0(s.perdidos)} pontos perdidos`, "m"], ["Clique para filtrar este país", "m"]]); })
-      .on("pointerleave", esconder)
-      .on("click", (ev, f) => { const i = mundo.features.indexOf(f); if (!stats.has(i)) return;
-        const nomes = [...new Set(rs.filter(r => r.feat === i).map(r => r.pais))]; esconder(); filtrar("pais", nomes); });
+          [`${s.ok} de ${s.n} rounds · ${f0(s.perdidos)} pontos perdidos`, "m"], ["Clique para ver este país de perto", "m"]]); }))
+      .on("pointerleave", esconder);
+    tocavel(terra, (ev, f) => { const i = fs.indexOf(f); if (stats.has(i) && o.aoTocarPais) o.aoTocarPais(nomeFeat.get(i)); });
   }
   let gl = null, gp = null;
   if (!paises) {
     const comPalpite = rs.filter(r => r.plat != null);
-    if (o.linhas || focado) g.append("g").selectAll("path").data(comPalpite).join("path")
+    if (o.linhas || o.palpites) g.append("g").selectAll("path").data(comPalpite).join("path")
       .attr("d", r => path({ type: "LineString", coordinates: [[r.lng, r.lat], [r.plng, r.plat]] }))
       .attr("fill", "none").attr("stroke", r => r.acertou ? "var(--ok)" : "var(--erro)")
       // Com centenas de rounds a linha cheia vira borrão; fica mais leve quanto mais rounds.
-      .attr("stroke-width", focado ? 1.8 : 1).attr("stroke-linecap", "round")
-      .attr("stroke-opacity", focado ? 0.85 : Math.max(0.08, Math.min(0.45, 25 / Math.sqrt(comPalpite.length + 1) / 4)))
+      .attr("stroke-width", o.palpites ? 1.8 : 1).attr("stroke-linecap", "round")
+      .attr("stroke-opacity", o.palpites ? 0.85 : Math.max(0.08, Math.min(0.45, 25 / Math.sqrt(comPalpite.length + 1) / 4)))
       .attr("vector-effect", "non-scaling-stroke");
-    gp = g.append("g").selectAll("g").data(focado ? comPalpite : []).join("g");
+    gp = g.append("g").selectAll("g").data(o.palpites ? comPalpite : []).join("g");
     gp.append("circle").attr("r", 4).attr("fill", "#fff").attr("stroke", "var(--ink-2)").attr("stroke-width", 1.8);
     gl = g.append("g").selectAll("g").data(rs).join("g").style("cursor", "pointer");
     gl.append("circle").attr("r", toque ? 18 : 12).attr("fill", "transparent");
-    const tam = (focado ? 1 : 0.82) * (toque ? 1.25 : 1);
+    const tam = (o.palpites ? 1 : 0.82) * (toque ? 1.25 : 1);
     // Acerto é círculo azul; erro é losango laranja. A forma separa mesmo sem cor.
     gl.append("path").attr("d", r => d3.symbol(r.acertou ? d3.symbolCircle : d3.symbolDiamond, (r.acertou ? 95 : 105) * tam * tam)())
       .attr("fill", r => r.acertou ? "var(--ok)" : "var(--erro)").attr("stroke", "#fff").attr("stroke-width", 2);
     if (o.numerar) gl.append("text").attr("x", 9).attr("y", -7).text(r => r.round)
       .style("fill", "var(--ink)").style("font-size", "12.5px").style("font-weight", 800)
       .style("paint-order", "stroke").style("stroke", "#fff").style("stroke-width", 3.5);
-    gl.on("pointermove", (ev, r) => mostrar(ev, [...linhasRound(r), ...(o.dicaClique ? [[o.dicaClique(r), "m"]] : [])]))
-      .on("pointerleave", esconder)
-      .on("click", (ev, r) => { esconder(); if (toque) folha(r, o); else if (o.aoClicar) o.aoClicar(r); });
+    gl.on("pointermove", soMouse((ev, r) => mostrar(ev, [...linhasRound(r), ["Clique para ver as opções", "m"]])))
+      .on("pointerleave", esconder);
+    tocavel(gl, (ev, r) => folha(r));
   }
   // Zoom: os pontos mantêm o tamanho na tela
   const posicionar = k => {
@@ -962,12 +983,13 @@ function tiles(rs) {
   }
 }
 
-function legendaMapa() {
+function legendaMapa(paises, palpites) {
   const el = document.getElementById("legenda-mapa");
-  if (ui.camada === "paises") el.innerHTML = `<span>acerto de país <span class="rampa">${RAMPA.map(c => `<b style="background:${c}"></b>`).join("")}</span> 0% a 100%</span><span class="dica">clique num país para filtrar</span>`;
+  if (paises) el.innerHTML = `<span>acerto de país</span>` + DIVERG.map(([, c, t]) => `<span><i class="dot" style="background:${c};border-radius:3px"></i>${t}</span>`).join("") +
+    `<span><i class="dot" style="background:var(--land);border:1px solid var(--land-borda);border-radius:3px"></i>sem rounds</span><span class="dica">mais claro: menos de 3 rounds</span>`;
   else el.innerHTML = `<span><i class="dot" style="background:var(--ok)"></i>✓ acertei o país</span>
     <span><i class="losango" style="background:var(--erro)"></i>✗ errei</span>` +
-    (estado.sel.size ? `<span><i class="dot" style="background:#fff;border:1.8px solid var(--ink-2)"></i>meu palpite</span>` : "");
+    (palpites ? `<span><i class="dot" style="background:#fff;border:1.8px solid var(--ink-2)"></i>meu palpite</span>` : "");
 }
 
 function itemPartida(p, sel, onClick) {
@@ -998,40 +1020,131 @@ function listaPorDia(el, ps, sel, onClick) {
 }
 const filtraBusca = (ps, q) => { q = q.trim().toLowerCase(); return q ? ps.filter(p => q.split(/\s+/).every(t => p.busca.includes(t))) : ps; };
 
-let ultimoClique = null, partidasNaLista = [];
-const buscaPartidas = document.getElementById("partidas-busca");
-buscaPartidas.oninput = () => atualizar();
-document.getElementById("sel-limpar").onclick = () => { estado.sel.clear(); atualizar(); };
-document.getElementById("sel-visiveis").onclick = () => { partidasNaLista.forEach(p => estado.sel.add(p.id)); atualizar(); };
 for (const id of ["camada", "linhas"]) document.querySelectorAll(`#${id} button`).forEach(b =>
   b.onclick = () => { ui[id] = b.dataset.v; atualizar(); });
 
+// Contorno do maior polígono do país, para o enquadramento mostrar o país inteiro mesmo com poucos rounds.
+// Só o maior, para a França não puxar a Guiana nem os EUA puxarem o Havaí.
+function contornoPrincipal(feat) {
+  const f = feat != null && mundo ? mundo.features[feat] : null; if (!f) return [];
+  const polis = f.geometry.type === "Polygon" ? [f.geometry.coordinates] : f.geometry.type === "MultiPolygon" ? f.geometry.coordinates : [];
+  const maior = polis.map(c => ({ c, a: d3.geoArea({ type: "Polygon", coordinates: c }) })).sort((a, b) => b.a - a.a)[0];
+  return maior ? maior.c[0] : [];
+}
+
 function paginaMapa(ps, rs, todos) {
-  tiles(todos); legendaMapa();
+  tiles(todos);
+  const v = ui.mapa, el = document.getElementById("mapa");
+  let pontos, opcoes, titulo, sub;
+  if (v.vista === "partidas") {
+    // Partida aberta: todos os rounds dela, mesmo com filtro de país ligado.
+    const sel = [...estado.sel].map(id => partidaPorId.get(id)).filter(Boolean);
+    pontos = sel.flatMap(p => p.rs);
+    opcoes = { camada: "pontos", palpites: true, numerar: sel.length <= 5,
+      enquadrar: pontos.flatMap(r => [[r.lng, r.lat], ...(r.plat != null ? [[r.plng, r.plat]] : [])]) };
+    titulo = sel.length === 1 ? sel[0].nome : `${sel.length} partidas`;
+    sub = "O número é o round; o anel branco é o seu palpite. Toque num ponto para ver o round.";
+  } else if (v.vista === "pais") {
+    pontos = todos.filter(r => r.pais === v.pais);
+    const feat = pontos.find(r => r.feat != null)?.feat;
+    opcoes = { camada: "pontos", palpites: true, destaque: feat, enquadrar: [...pontos.map(r => [r.lng, r.lat]), ...contornoPrincipal(feat)] };
+    titulo = v.pais;
+    sub = `${f0(pontos.length)} rounds no filtro atual. A linha vai do local até o seu palpite.`;
+  } else {
+    pontos = todos;
+    const paises = ui.camada === "paises";
+    opcoes = { camada: ui.camada, linhas: ui.linhas === "sim", aoTocarPais: irPais };
+    titulo = "Seu mundo";
+    sub = paises ? "Cada país pintado pelo seu acerto nos rounds que caíram nele. Toque num país para ver de perto."
+      : "Cada ponto é o local de um round. Toque num ponto para ver o round.";
+  }
+  document.getElementById("mapa-titulo").textContent = titulo;
+  document.getElementById("mapa-sub").textContent = sub;
+  const noMundo = v.vista === "mundo";
+  document.getElementById("camada").hidden = !noMundo;
+  document.getElementById("linhas").hidden = !(noMundo && ui.camada === "pontos");
   document.querySelectorAll("#camada button").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.v === ui.camada)));
   document.querySelectorAll("#linhas button").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.v === ui.linhas)));
-  document.getElementById("linhas").hidden = ui.camada === "paises";
-  const focado = estado.sel.size > 0;
-  desenharMapa(document.getElementById("mapa"), rs, { focado, enquadrar: ativo("pais") && estado.pais.size <= 5, numerar: focado && d3.groups(rs, r => r.id).length <= 5,
-    camada: ui.camada, linhas: ui.linhas === "sim",
-    dicaClique: r => estado.sel.has(r.id) ? "Clique para tirar esta partida da seleção" : "Clique para ver só esta partida",
-    aoClicar: r => { if (estado.sel.has(r.id)) estado.sel.delete(r.id); else estado.sel.add(r.id); atualizar(); } });
-  document.getElementById("mapa-sub").textContent = ui.camada === "paises"
-    ? "Cor do país pelo acerto de país nos rounds que caíram nele."
-    : focado && ehPadrao() ? `As ${estado.sel.size} partidas mais recentes em mapas mundiais. O número é o round; o anel branco é o seu palpite. O × no topo mostra todas.`
-    : focado ? `${f0(rs.length)} rounds das partidas selecionadas. O número é o round; o anel branco é o seu palpite.`
-    : "Cada ponto é o local real; a linha vai até o seu palpite. Clique num ponto para ver só aquela partida.";
-  // Lista
-  partidasNaLista = filtraBusca(ps, buscaPartidas.value);
-  document.getElementById("partidas-sub").textContent = `${f0(ps.length)} no filtro` + (estado.sel.size ? ` · ${estado.sel.size} selecionada${estado.sel.size > 1 ? "s" : ""}` : "");
-  listaPorDia(document.getElementById("lista-partidas"), partidasNaLista, p => estado.sel.has(p.id), (ev, p, i) => {
-    if (ev.shiftKey && ultimoClique != null) {
-      const a = partidasNaLista.findIndex(x => x.id === ultimoClique);
-      if (a >= 0) { const [i0, i1] = [Math.min(a, i), Math.max(a, i)]; for (let k = i0; k <= i1; k++) estado.sel.add(partidasNaLista[k].id); }
-    } else if (estado.sel.has(p.id)) estado.sel.delete(p.id); else estado.sel.add(p.id);
-    ultimoClique = p.id; atualizar();
-  });
+  legendaMapa(noMundo && ui.camada === "paises", !noMundo);
+  desenharMapa(el, pontos, opcoes);
+  trilha();
+  const lado = document.getElementById("lado-mapa");
+  if (v.vista === "pais") ladoPais(lado, v.pais, pontos, todos);
+  else ladoPartidas(lado, ps);
   descobertas(todos);
+}
+
+// Caminho de volta, sempre visível em cima do mapa
+function trilha() {
+  const el = document.getElementById("trilha"), v = ui.mapa; el.replaceChildren();
+  if (v.vista === "mundo") {
+    el.innerHTML = ui.camada === "paises" ? `<span class="dica-mapa">Toque num país para ver de perto</span>` : "";
+    return;
+  }
+  const volta = document.createElement("button"); volta.className = "voltar"; volta.innerHTML = "← Mundo"; volta.onclick = irMundo;
+  el.appendChild(volta);
+  if (v.pais) {
+    const sep = document.createElement("span"); sep.className = "sep"; sep.textContent = "›"; el.appendChild(sep);
+    const b = document.createElement(v.vista === "partidas" ? "button" : "span"); b.className = "passo"; b.textContent = v.pais;
+    if (v.vista === "partidas") b.onclick = () => irPais(v.pais);
+    el.appendChild(b);
+  }
+  if (v.vista === "partidas") {
+    const sep = document.createElement("span"); sep.className = "sep"; sep.textContent = "›"; el.appendChild(sep);
+    const ids = [...estado.sel], s = document.createElement("span"); s.className = "passo";
+    s.textContent = ids.length === 1 ? partidaPorId.get(ids[0])?.nome || "" : `${ids.length} partidas`; el.appendChild(s);
+  }
+}
+
+// Coluna ao lado do mapa, no mundo e na partida: a lista de partidas
+function ladoPartidas(lado, ps) {
+  const v = ui.mapa, aberta = v.vista === "partidas";
+  lado.innerHTML = `<div class="cab-card"><h2>${aberta ? "Partidas" : "Últimas partidas"}</h2><span class="sub">${f0(ps.length)} no filtro</span></div>
+    <div class="dica">Toque numa partida para vê-la no mapa.${toque ? "" : " Ctrl ou Shift soma outra."}</div>
+    <div class="busca-linha"><input type="search" placeholder="Buscar mapa, país, data" value="${esc(ui.buscaMapa)}"></div>
+    <div class="lista-partidas" role="listbox"></div>`;
+  const lista = lado.querySelector(".lista-partidas"), inp = lado.querySelector("input");
+  const desenhar = () => listaPorDia(lista, filtraBusca(ps, ui.buscaMapa), p => aberta && estado.sel.has(p.id), (ev, p) => {
+    if (aberta && (ev.shiftKey || ev.ctrlKey || ev.metaKey)) {
+      const ids = new Set(estado.sel); if (ids.has(p.id)) ids.delete(p.id); else ids.add(p.id);
+      if (ids.size) irPartida([...ids]); else irMundo();
+    } else irPartida([p.id]);
+  });
+  inp.oninput = () => { ui.buscaMapa = inp.value; desenhar(); };
+  desenhar();
+  const sel = lista.querySelector('[aria-selected="true"]'); if (sel) sel.scrollIntoView({ block: "nearest" });
+}
+
+// Coluna ao lado do mapa, no país: o raio-x dele
+function ladoPais(lado, nome, rs, todos) {
+  const n = rs.length, ok = d3.sum(rs, r => r.acertou), kms = rs.map(r => r.km).filter(x => x != null);
+  const erros = rs.filter(r => !r.acertou && r.ppais);
+  const chutes = [...d3.rollup(erros, v => v.length, r => r.ppais)].sort((a, b) => b[1] - a[1]);
+  const trocas = [...d3.rollup(todos.filter(r => r.ppais === nome && r.pais !== nome), v => v.length, r => r.pais)].sort((a, b) => b[1] - a[1]);
+  const reg = rs.filter(r => regiaoCerta(r) != null);
+  // Só país de verdade vira botão; "Sem palpite" fica como texto.
+  const chips = xs => xs.length ? `<div class="chips">${xs.slice(0, 6).map(([p, k]) => todosPaises.includes(p) ? `<button class="chip" data-p="${esc(p)}">${esc(p)} <b>${k}×</b></button>` : `<span class="chip">${esc(p)} <b>${k}×</b></span>`).join("")}</div>` : `<div class="dica">Nenhum.</div>`;
+  lado.innerHTML = `<div class="cab-card"><h2>${esc(nome)}</h2><button class="btn link" id="lado-voltar">← Mundo</button></div>` +
+    (!n ? vazioHTML(`Nenhum round de ${esc(nome)} no filtro atual.`, "binoculo") : `
+    <div class="resumo-partida">
+      <div><div class="r">Acerto de país</div><div class="v tnum">${fpct(ok / n)}</div></div>
+      <div><div class="r">Rounds</div><div class="v tnum">${ok} de ${n}</div></div>
+      <div><div class="r">Distância mediana</div><div class="v tnum">${kms.length ? f0(d3.median(kms)) + " km" : NA}</div></div>
+      <div><div class="r">Pontos por round</div><div class="v tnum">${f0(d3.mean(rs, r => r.pontos))}</div></div>
+    </div>
+    <h3>Quando errou, você chutou</h3>${chips(chutes)}
+    <h3>Você chutou ${esc(nome)} quando era</h3>${chips(trocas)}
+    ${reg.length >= 3 ? `<div class="dica" style="margin-top:8px">Com o país certo, caiu no setor certo em ${fpct(d3.mean(reg, regiaoCerta))} dos ${reg.length} rounds.</div>` : ""}
+    <h3>Rounds, do mais novo</h3><div class="rounds-lista"></div>`);
+  lado.querySelector("#lado-voltar").onclick = irMundo;
+  lado.querySelectorAll("button.chip").forEach(c => c.onclick = () => irPais(c.dataset.p));
+  const lista = lado.querySelector(".rounds-lista"); if (!lista) return;
+  for (const r of rs.slice().reverse()) {
+    const d = document.createElement("button"); d.className = "rl";
+    d.innerHTML = `<span class="${r.acertou ? "ok" : "no"}">${r.acertou ? "✓" : "✗"}</span><span class="t">${r.acertou ? "acertou" : "chutou " + esc(r.ppais || NA)}<small>${esc(r.nome)} · round ${r.round}</small></span><span class="k tnum">${r.km != null ? f0(r.km) + " km" : ""}</span>`;
+    d.onclick = () => irPartida([r.id], nome);
+    lista.appendChild(d);
+  }
 }
 
 // Descobertas: frases tiradas do filtro atual, sem nada inventado.
@@ -1042,7 +1155,7 @@ function descobertas(rs) {
   const conf = d3.rollups(erros, v => v.length, r => r.pais, r => r.ppais).flatMap(([a, xs]) => xs.map(([b, n]) => ({ a, b, n }))).sort((x, y) => y.n - x.n);
   if (conf.length && conf[0].n >= 2) cards.push({ d: "setas", k: "Confusão campeã",
     t: `Você chutou <b>${esc(conf[0].b)}</b> quando era <b>${esc(conf[0].a)}</b> ${conf[0].n} vezes.`,
-    acao: ["Ver no mapa", () => { ui.camada = "rounds"; filtrar("pais", [conf[0].a]); }] });
+    acao: [`Ver ${conf[0].a}`, () => irPais(conf[0].a)] });
   const porPais = d3.rollups(rs, v => ({ n: v.length, ok: d3.sum(v, r => r.acertou), perdidos: d3.sum(v, r => 5000 - r.pontos) }), r => r.pais)
     .map(([pais, o]) => ({ pais, ...o, p: o.ok / o.n }));
   const caro = porPais.slice().sort((a, b) => b.perdidos - a.perdidos)[0];
@@ -1116,8 +1229,9 @@ function detalhe(p) {
     <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap"><button class="btn primario" id="ver-no-mapa">Ver no mapa grande</button></div>`;
   el.querySelector("#ant").onclick = () => abrirPartida(lista2[i - 1].id);
   el.querySelector("#prox").onclick = () => abrirPartida(lista2[i + 1].id);
-  el.querySelector("#ver-no-mapa").onclick = () => { estado.sel = new Set([p.id]); location.hash = "#mapa"; };
-  desenharMapa(el.querySelector("#mapa-partida"), p.rs, { focado: true, numerar: true, camada: "rounds", linhas: true });
+  el.querySelector("#ver-no-mapa").onclick = () => irPartida([p.id], null);
+  desenharMapa(el.querySelector("#mapa-partida"), p.rs, { camada: "pontos", palpites: true, numerar: true,
+    enquadrar: p.rs.flatMap(r => [[r.lng, r.lat], ...(r.plat != null ? [[r.plng, r.plat]] : [])]) });
   const sn = v => v === "Sim" ? ["✓ Sim", "ok"] : v === "Não" ? ["✗ Não", "no"] : v ? [v, ""] : [NA, ""];
   const duelo = p.grupo === "Duelo";
   tabelaSimples(el.querySelector("#tab-partida"),
@@ -1156,7 +1270,7 @@ function abaConfusoes(el, rs) {
   const dados = d3.rollups(erros, v => ({ n: v.length, km: d3.mean(v, r => r.km), pts: d3.mean(v, r => r.pontos) }), r => r.pais, r => r.ppais)
     .flatMap(([pais, xs]) => xs.map(([pp, o]) => ({ pais, pp, ...o }))).sort((a, b) => b.n - a.n || a.km - b.km);
   const idx = new Map(dados.map(d => [d.pais + "|" + d.pp, d.n]));
-  const c1 = card(grade, "Pares que você confunde", `${f0(erros.length)} rounds com o país errado. Clique num par para ver os rounds daquele país no mapa.`, "setas");
+  const c1 = card(grade, "Pares que você confunde", `${f0(erros.length)} rounds com o país errado. Clique num par para ver aquele país de perto no mapa.`, "setas");
   const r1 = document.createElement("div"); r1.className = "ranking"; c1.appendChild(r1);
   const max = dados[0]?.n || 1;
   if (!dados.length) r1.innerHTML = vazioHTML("Nenhum erro de país no filtro.", "trofeu");
@@ -1165,7 +1279,7 @@ function abaConfusoes(el, rs) {
     linhaRanking(r1, { nome: `${esc(d.pais)} → ${esc(d.pp)}`, sub: volta ? `e ${volta}× ao contrário` : "", frac: d.n / max,
       num: `<b>${d.n}×</b> · ${d.km != null ? f0(d.km) + " km" : NA}`,
       dica: [[`Era ${d.pais}, chutei ${d.pp}`], [`${d.n} vezes · ${d.km != null ? f0(d.km) : NA} km em média · ${f0(d.pts)} pontos em média`, "m"]],
-      aoClicar: () => { esconder(); ui.camada = "rounds"; filtrar("pais", [d.pais]); location.hash = "#mapa"; } });
+      aoClicar: () => { esconder(); irPais(d.pais); } });
   }
   // Países que mais recebem chute errado
   const c2 = card(grade, "Para onde vão os chutes errados", "País do palpite nos rounds com o país errado.", "aviao");
@@ -1181,7 +1295,7 @@ function abaPlacar(el, rs) {
   const base = rs.filter(r => !mapaDePais.has(r.mapa)), fora = rs.length - base.length;
   const c = card(el, "Quantas vezes errei cada país",
     `${f0(base.length)} rounds em mapas mundiais e regionais` + (fora ? `; ficaram de fora ${f0(fora)} rounds de mapas de um país só (${[...mapaDePais].join(", ")}).` : ".") +
-    " Clique num país para ver os rounds dele no mapa.", "caderno");
+    " Clique num país para vê-lo de perto no mapa.", "caderno");
   const dados = d3.rollups(base, v => ({ n: v.length, erros: v.filter(r => !r.acertou).length,
     viz: [...d3.rollup(v.filter(r => !r.acertou && r.ppais), x => x.length, r => r.ppais)].sort((a, b) => b[1] - a[1]) }), r => r.pais)
     .map(([pais, o]) => ({ pais, ...o })).filter(d => d.erros > 0).sort((a, b) => b.erros - a.erros || a.pais.localeCompare(b.pais));
@@ -1192,10 +1306,10 @@ function abaPlacar(el, rs) {
     sub: `de ${d.n} rounds · chutei ${d.viz.slice(0, 2).map(([p, n]) => `${esc(p)} (${n})`).join(", ")}`,
     frac: d.erros / max, num: `<b>${d.erros}×</b> · ${fpct(d.erros / d.n)}`,
     dica: [[d.pais], [`Errei ${d.erros} de ${d.n} rounds (${fpct(d.erros / d.n)})`], [d.viz.slice(0, 4).map(([p, n]) => `${p} ${n}×`).join(" · "), "m"]],
-    aoClicar: () => { esconder(); ui.camada = "rounds"; filtrar("pais", [d.pais]); location.hash = "#mapa"; } }));
+    aoClicar: () => { esconder(); irPais(d.pais); } }));
 }
 function abaPaises(el, rs) {
-  const c = card(el, "Acerto por país real", "Clique num país para filtrar só ele.", "bandeira");
+  const c = card(el, "Acerto por país real", "Clique num país para vê-lo de perto no mapa.", "bandeira");
   const ord = document.createElement("div"); ord.className = "ordem";
   ord.innerHTML = `<span class="dica">Ordenar por</span><div class="segmento">` +
     [["perdidos", "Pontos perdidos"], ["pior", "Pior acerto"], ["melhor", "Melhor acerto"], ["n", "Mais rounds"]]
@@ -1216,7 +1330,7 @@ function abaPaises(el, rs) {
     const num = o === "perdidos" ? `<b>${f0(d.perdidos)}</b> pts · ${fpct(d.p)}` : o === "n" ? `<b>${d.n}</b> rounds · ${fpct(d.p)}` : `<b>${fpct(d.p)}</b> · ${d.ok}/${d.n}`;
     linhaRanking(r, { nome: esc(d.pais), sub: `${d.n} rounds · km mediano ${d.km != null ? f0(d.km) : NA}`, frac, num,
       dica: [[d.pais], [`${d.ok} de ${d.n} com o país certo (${fpct(d.p)})`], [`${f0(d.perdidos)} pontos perdidos · ${f0(d.perdidos / d.n)} por round`, "m"]],
-      aoClicar: () => { esconder(); ui.camada = "rounds"; filtrar("pais", [d.pais]); location.hash = "#mapa"; } });
+      aoClicar: () => { esconder(); irPais(d.pais); } });
   }
 }
 const SETORES = [["NO", "N", "NE"], ["O", "C", "L"], ["SO", "S", "SE"]];
@@ -1244,7 +1358,7 @@ function abaRegioes(el, rs) {
     .filter(d => d.n >= 3).sort((a, b) => a.p - b.p || b.n - a.n);
   if (!dados.length) r.innerHTML = vazioHTML("Poucos rounds para comparar.", "bussola");
   for (const d of dados.slice(0, 20)) linhaRanking(r, { nome: esc(d.pais), sub: `${d.n} rounds com o país certo`, frac: d.p,
-    num: `<b>${fpct(d.p)}</b> · ${d.ok}/${d.n}`, aoClicar: () => { esconder(); ui.camada = "rounds"; filtrar("pais", [d.pais]); location.hash = "#mapa"; } });
+    num: `<b>${fpct(d.p)}</b> · ${d.ok}/${d.n}`, aoClicar: () => { esconder(); irPais(d.pais); } });
 }
 const FAIXAS = [[0, 25, "até 25 km"], [25, 100, "25 a 100"], [100, 250, "100 a 250"], [250, 500, "250 a 500"],
   [500, 1000, "500 a 1.000"], [1000, 2500, "1.000 a 2.500"], [2500, Infinity, "mais de 2.500"]];
@@ -1434,12 +1548,24 @@ const PAGINAS = {
   rounds: ["Rounds", "A tabela de todos os rounds, para conferir e ordenar."]
 };
 function lerHash() {
-  const [pag, sub] = location.hash.replace(/^#/, "").split("/");
+  const partes = location.hash.replace(/^#/, "").split("/"), [pag, sub] = partes;
   ui.pagina = PAGINAS[pag] ? pag : "mapa";
+  if (ui.pagina === "mapa") {
+    // #mapa, #mapa/pais/<nome>, #mapa/partida/<ids>, #mapa/pais/<nome>/partida/<ids>
+    let i = 1; const v = { vista: "mundo", pais: null };
+    if (partes[i] === "pais" && partes[i + 1]) { v.pais = decodeURIComponent(partes[i + 1]); v.vista = "pais"; i += 2; }
+    const ids = partes[i] === "partida" && partes[i + 1] ? partes[i + 1].split(",").filter(id => partidaPorId.has(id)) : [];
+    if (ids.length) { v.vista = "partidas"; estado.sel = new Set(ids); } else estado.sel = new Set();
+    ui.mapa = v;
+  }
   if (ui.pagina === "erros" && sub && ["confusoes", "placar", "paises", "regioes", "distancia"].includes(sub)) ui.aba = sub;
   if (ui.pagina === "partidas" && sub && partidaPorId.has(sub)) ui.aberta = sub;
 }
-window.addEventListener("hashchange", () => { lerHash(); fecharPop(); fecharFolha(); atualizar(); window.scrollTo({ top: 0 }); });
+window.addEventListener("hashchange", () => { const antes = ui.pagina; lerHash(); fecharPop(); fecharFolha(); atualizar();
+  // Descer de nível dentro do mapa não pula para o topo da página; só traz o mapa para a tela se ele saiu dela.
+  if (antes !== ui.pagina) window.scrollTo({ top: 0 });
+  else if (ui.pagina === "mapa") { const c = document.getElementById("mapa").closest(".card").getBoundingClientRect();
+    if (c.top < 0 || c.top > window.innerHeight * 0.6) window.scrollTo(0, c.top + window.scrollY - 8); } });
 
 function atualizar() {
   salvar();
@@ -1473,7 +1599,6 @@ let timerTela = null, larguraTela = window.innerWidth;
 window.addEventListener("resize", () => { if (Math.abs(window.innerWidth - larguraTela) < 40) return;
   larguraTela = window.innerWidth; clearTimeout(timerTela); timerTela = setTimeout(atualizar, 200); });
 lerHash();
-estado.sel = new Set(ultimas5(partidasFiltradas()));
 atualizar();
 carregarMundo().then(atualizar);
 </script>
