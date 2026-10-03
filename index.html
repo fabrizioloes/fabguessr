@@ -167,6 +167,9 @@ input[type="search"]:focus, input[type="date"]:focus { border-color: #9ec5f4; bo
 button.passo { cursor: pointer; color: var(--sky-ink); }
 .trilha .sep { color: var(--ink-2); font-weight: 800; }
 .trilha .dica-mapa { background: rgba(255,255,255,.88); border-radius: 999px; padding: 5px 12px; font-size: 12.5px; font-weight: 700; color: var(--ink-2); pointer-events: none; }
+.aviso-filtros { display: flex; gap: 10px; align-items: center; justify-content: space-between; flex-wrap: wrap;
+  background: var(--butter); border: 1px solid #f3df97; color: #6b5300; border-radius: 14px; padding: 8px 8px 8px 14px; margin-bottom: 10px; font-size: 13.5px; }
+.aviso-filtros .btn { background: #fff; border-color: #f3df97; color: #6b5300; padding: 7px 14px; }
 .lado { display: flex; flex-direction: column; min-height: 0; }
 .lado h3 { font-family: "Fredoka"; font-size: 14.5px; font-weight: 600; margin: 14px 0 6px; }
 .chips { display: flex; gap: 6px; flex-wrap: wrap; }
@@ -335,6 +338,8 @@ tr.clicavel { cursor: pointer; }
   .zoom-btns button { width: 38px; height: 38px; }
   .lista-partidas { max-height: 380px; }
   .trilha .voltar { padding: 9px 15px; }
+  .legenda .dica { display: none; }
+  .legenda { gap: 4px 10px; font-size: 12px; }
   .abas { display: flex; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
   .aba { flex: none; padding: 7px 12px; font-size: 14px; }
   #pop { left: 10px !important; right: 10px; width: auto; }
@@ -382,6 +387,7 @@ tr.clicavel { cursor: pointer; }
                 <button data-v="sim">Com linhas</button><button data-v="nao">Sem linhas</button></div>
               <div class="legenda" id="legenda-mapa"></div>
             </div>
+            <div class="aviso-filtros" id="aviso-filtros" hidden></div>
             <div class="mapa" id="mapa"><div class="trilha" id="trilha"></div></div>
           </div>
           <div class="lado" id="lado-mapa"></div>
@@ -595,7 +601,7 @@ const ui = { pagina: "mapa", aba: "confusoes", aberta: null, camada: "paises", l
   ordemRounds: { col: 0, dir: -1 } };
 const ativo = k => estado[k].size < FILTRO[k].opcoes.length;
 
-const CHAVE = "geoguessr-track-v2";
+const CHAVE = "geoguessr-track-v3", CHAVE_ANTIGA = "geoguessr-track-v2";
 function salvar() {
   try {
     const s = { periodo: estado.periodo, de: estado.de, ate: estado.ate,
@@ -606,7 +612,9 @@ function salvar() {
 }
 function carregar() {
   try {
-    const s = JSON.parse(localStorage.getItem(CHAVE)); if (!s) return;
+    let s = JSON.parse(localStorage.getItem(CHAVE));
+    if (!s) { s = JSON.parse(localStorage.getItem(CHAVE_ANTIGA)); if (s) delete s.fora_pais; }
+    if (!s) return;
     const e = estadoInicial();
     e.periodo = s.periodo || "tudo"; e.de = s.de || ""; e.ate = s.ate || "";
     // Opção nova (mapa, país) entra ligada, porque só o que foi desligado fica guardado.
@@ -668,6 +676,19 @@ function filtrar(k, valores) { estado[k] = new Set(valores); atualizar(); }
 // Barra de filtros e popover
 // ---------------------------------------------------------------------------
 const SETA = `<svg class="seta" viewBox="0 0 16 16"><path d="M4 6l4 4 4-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+function limparFiltros() { const sel = estado.sel; estado = estadoInicial(); estado.sel = sel; atualizar(); }
+// Filtro ligado fica dito em cima do mapa, com o botão para tirar. Antes ficava só na pílula, que no
+// celular some no fim da faixa.
+function avisoFiltros() {
+  const el = document.getElementById("aviso-filtros"), partes = [];
+  if (estado.periodo !== "tudo") { const [de, ate] = limitesPeriodo();
+    partes.push(estado.periodo === "custom" ? `de ${de ? dataCurta(de) : "início"} a ${ate ? dataCurta(ate) : "hoje"}` : PERIODOS.find(([v]) => v === estado.periodo)[1].toLowerCase()); }
+  for (const f of FILTROS) if (ativo(f.k)) partes.push(`${f.nome} ${resumoFiltro(f)}`);
+  el.hidden = !partes.length;
+  if (!partes.length) return;
+  el.innerHTML = `<span>Mostrando só: <b>${esc(partes.join(" · "))}</b></span><button class="btn">Tirar filtros</button>`;
+  el.querySelector("button").onclick = limparFiltros;
+}
 function desenharFiltros(ps) {
   const el = document.getElementById("filtros"); el.replaceChildren();
   const seg = document.createElement("div"); seg.className = "segmento";
@@ -679,6 +700,7 @@ function desenharFiltros(ps) {
   bd.onclick = () => abrirPop(bd, popDatas); seg.appendChild(bd);
   el.appendChild(seg);
 
+  const estreita = window.innerWidth <= 760, pilulas = [];
   for (const f of FILTROS) {
     if (f.k === "tipo" && !estado.jogo.has("Duelo 1v1") && !estado.jogo.has("Duelo 2v2")) continue;
     if (f.k === "resultado" && !estado.jogo.has("Duelo 1v1") && !estado.jogo.has("Duelo 2v2")) continue;
@@ -688,11 +710,16 @@ function desenharFiltros(ps) {
       if (ev.target.closest(".x")) { estado[f.k] = new Set(f.opcoes); fecharPop(); atualizar(); return; }
       abrirPop(b, () => popOpcoes(f));
     };
-    el.appendChild(b);
+    pilulas.push([ativo(f.k), b]);
   }
   const algum = estado.periodo !== "tudo" || FILTROS.some(f => ativo(f.k));
-  if (algum) { const l = document.createElement("button"); l.className = "btn link"; l.textContent = "Limpar filtros";
-    l.onclick = () => { const sel = estado.sel; estado = estadoInicial(); estado.sel = sel; atualizar(); }; el.appendChild(l); }
+  let limpar = null;
+  if (algum) { limpar = document.createElement("button"); limpar.className = "btn link"; limpar.textContent = "Limpar filtros";
+    limpar.onclick = limparFiltros; }
+  if (estreita && algum) {
+    el.prepend(...pilulas.filter(([a]) => a).map(([, b]) => b), limpar);
+    el.append(...pilulas.filter(([a]) => !a).map(([, b]) => b));
+  } else { el.append(...pilulas.map(([, b]) => b)); if (limpar) el.appendChild(limpar); }
   if (!algum) { const d = document.createElement("span"); d.className = "dica";
     d.textContent = "Clique num filtro para escolher. O × tira o filtro."; el.appendChild(d); }
 }
@@ -1067,7 +1094,7 @@ function paginaMapa(ps, rs, todos) {
   document.querySelectorAll("#linhas button").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.v === ui.linhas)));
   legendaMapa(noMundo && ui.camada === "paises", !noMundo);
   desenharMapa(el, pontos, opcoes);
-  trilha();
+  trilha(); avisoFiltros();
   const lado = document.getElementById("lado-mapa");
   if (v.vista === "pais") ladoPais(lado, v.pais, pontos, todos);
   else ladoPartidas(lado, ps);
