@@ -220,6 +220,15 @@ input[type="search"]:focus, input[type="date"]:focus { border-color: #9ec5f4; bo
 .rk .trilho b { position: absolute; left: 0; top: 0; bottom: 0; background: var(--barra); border-radius: 0 4px 4px 0; }
 .rk .num { font-size: 12.5px; color: var(--ink-2); text-align: right; white-space: nowrap; }
 .rk .num b { color: var(--ink); font-size: 13.5px; }
+.rk .pos { display: inline-block; min-width: 26px; color: var(--muted); font-weight: 800; font-size: 12px; }
+#folha { position: fixed; z-index: 70; left: 10px; right: 10px; bottom: 74px; background: var(--surface); border: 1px solid var(--ring);
+  border-radius: 20px; padding: 14px 16px; box-shadow: 0 14px 40px rgba(70,55,30,.22); display: none; font-size: 14px; }
+#folha.aberta { display: grid; gap: 3px; }
+#folha .f1 { font-family: "Fredoka"; font-size: 18px; font-weight: 600; padding-right: 30px; }
+#folha .acoes { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+#folha .acoes .btn { padding: 9px 14px; font-size: 14px; }
+#folha .fechar { position: absolute; right: 10px; top: 8px; width: 32px; height: 32px; border-radius: 50%; border: 0; background: var(--grid);
+  font-size: 18px; cursor: pointer; }
 .ordem { display: flex; gap: 8px; align-items: center; margin-bottom: 10px; flex-wrap: wrap; }
 
 .bussola { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; max-width: 380px; margin: 6px auto 0; }
@@ -270,9 +279,43 @@ tr.clicavel { cursor: pointer; }
   .nav { flex-direction: row; width: 100%; justify-content: space-around; }
   .nav a { flex-direction: column; gap: 2px; font-size: 11px; padding: 6px 8px; }
   .nav a .qtd { display: none; }
-  .conteudo { padding: 16px 16px 90px; }
-  .topo .voo { display: none; }
-  .rk { grid-template-columns: 1fr auto; } .rk .trilho { grid-column: 1 / -1; grid-row: 2; }
+  .conteudo { padding: 12px 12px 76px; }
+  .topo .voo, .topo .sub { display: none; }
+  .topo .icone-pagina { width: 34px; height: 34px; }
+  .topo h1 { font-size: 21px; }
+  /* Barra de baixo enxuta */
+  .lateral { padding: 2px 4px calc(2px + env(safe-area-inset-bottom)); }
+  .nav { gap: 0; }
+  .nav a { padding: 5px 4px; font-size: 10.5px; border-radius: 10px; flex: 1; }
+  .nav a svg { width: 22px; height: 22px; }
+  .nav a[aria-current="page"] { box-shadow: none; }
+  /* Filtros numa faixa só, que rola para o lado e não fica presa no topo */
+  .filtros { position: static; flex-wrap: nowrap; overflow-x: auto; margin: 10px -12px 12px; padding: 4px 12px;
+    scrollbar-width: none; background: none; backdrop-filter: none; }
+  .filtros::-webkit-scrollbar { display: none; }
+  .filtros > * { flex: none; }
+  .filtros .dica { display: none; }
+  .segmento button { padding: 5px 9px; }
+  /* Indicadores em duas colunas, mais baixos */
+  /* Indicadores numa faixa que rola para o lado, para o mapa aparecer logo */
+  .tiles { display: flex; overflow-x: auto; gap: 8px; margin: 0 -12px 12px; padding: 0 12px; scrollbar-width: none; }
+  .tiles::-webkit-scrollbar { display: none; }
+  .tile { flex: 0 0 136px; padding: 9px 12px; border-radius: 16px; }
+  .tile .label { font-size: 12px; }
+  .tile .valor { font-size: 21px; }
+  .tile .nota { font-size: 11px; max-width: none; }
+  .tile svg { display: none; }
+  #mapa-sub, .partidas > .dica { display: none; }
+  .card { padding: 14px 12px; border-radius: 18px; }
+  .mapa { margin: 0 -4px; border-radius: 14px; }
+  .barra-mapa { gap: 6px; }
+  .rosa { width: 42px; height: 42px; }
+  .zoom-btns button { width: 38px; height: 38px; }
+  .lista-partidas { max-height: 380px; }
+  .abas { display: flex; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+  .aba { flex: none; padding: 7px 12px; font-size: 14px; }
+  #pop { left: 10px !important; right: 10px; width: auto; }
+  .rk { grid-template-columns: 1fr auto; gap: 4px 10px; padding: 8px 6px; } .rk .trilho { grid-column: 1 / -1; grid-row: 2; height: 8px; }
 }
 </style>
 </head>
@@ -352,7 +395,8 @@ tr.clicavel { cursor: pointer; }
     <section data-pagina="erros" hidden>
       <div class="abas" role="tablist" id="abas-erros">
         <button class="aba" data-aba="confusoes" role="tab"><span data-d="setas"></span>Confusões</button>
-        <button class="aba" data-aba="paises" role="tab"><span data-d="bandeira"></span>Países</button>
+        <button class="aba" data-aba="placar" role="tab"><span data-d="caderno"></span>Erros por país</button>
+        <button class="aba" data-aba="paises" role="tab"><span data-d="bandeira"></span>Acerto</button>
         <button class="aba" data-aba="regioes" role="tab"><span data-d="bussola"></span>Regiões</button>
         <button class="aba" data-aba="distancia" role="tab"><span data-d="regua"></span>Distância</button>
       </div>
@@ -390,6 +434,7 @@ tr.clicavel { cursor: pointer; }
 </div>
 <div id="pop" role="dialog"></div>
 <div id="tip" role="tooltip"></div>
+<div id="folha" role="dialog" aria-label="Round"></div>
 
 <script>
 // ===========================================================================
@@ -634,7 +679,7 @@ function desenharFiltros(ps) {
   const algum = estado.periodo !== "tudo" || FILTROS.some(f => ativo(f.k));
   if (algum) { const l = document.createElement("button"); l.className = "btn link"; l.textContent = "Limpar filtros";
     l.onclick = () => { const sel = estado.sel; estado = estadoInicial(); estado.sel = sel; atualizar(); }; el.appendChild(l); }
-  if (estado.sel.size) {
+  if (estado.sel.size && ui.pagina === "mapa") {
     const visiveis = ps.filter(p => estado.sel.has(p.id)).length;
     const s = document.createElement("span"); s.className = "chip-sel";
     s.textContent = ehPadrao() ? `Últimas ${visiveis} partidas em mapas mundiais` :
@@ -644,7 +689,7 @@ function desenharFiltros(ps) {
     x.onclick = () => { estado.sel.clear(); atualizar(); };
     s.appendChild(x); el.appendChild(s);
   }
-  if (!estado.sel.size || !ehPadrao()) { const u = document.createElement("button"); u.className = "btn link";
+  if (ui.pagina === "mapa" && (!estado.sel.size || !ehPadrao())) { const u = document.createElement("button"); u.className = "btn link";
     u.textContent = "Ver últimas 5"; u.title = "As 5 partidas mais recentes em mapas que não são de um país só";
     u.onclick = () => { estado.sel = new Set(ultimas5(partidasFiltradas())); atualizar(); }; el.appendChild(u); }
   if (!algum && !estado.sel.size) { const d = document.createElement("span"); d.className = "dica";
@@ -764,7 +809,8 @@ function ligarRoundsAosPaises() {
 let nomeFeat = new Map();
 const RAMPA = ["#cde2fb", "#9ec5f4", "#6da7ec", "#3987e5", "#256abf", "#184f95"];
 const corAcerto = p => RAMPA[Math.min(RAMPA.length - 1, Math.floor(p * RAMPA.length))];
-const W = 1000, H = 520;
+// Toque: área maior em volta de cada ponto, e o toque abre um cartão em vez do tooltip.
+const toque = window.matchMedia("(pointer: coarse)").matches;
 
 function zoomBtns(el) {
   if (el.querySelector(".zoom-btns")) return;
@@ -778,24 +824,59 @@ function zoomBtns(el) {
   const rosa = document.createElement("span"); rosa.className = "rosa"; rosa.innerHTML = doodle("rosa"); el.appendChild(rosa);
 }
 
+const elFolha = document.getElementById("folha");
+function folha(r, o) {
+  elFolha.innerHTML = `<button class="fechar" aria-label="Fechar">×</button>
+    <div class="f1">${esc(r.pais)}${r.regiao ? " (" + r.regiao + ")" : ""}</div>
+    <div class="${r.acertou ? "ok" : "no"}">${r.acertou ? "✓" : "✗"} palpite: ${esc(r.ppais || NA)}${r.pregiao ? " (" + r.pregiao + ")" : ""}</div>
+    <div>${r.km != null ? f0(r.km) + " km · " : ""}${f0(r.pontos)} pontos</div>
+    <div class="sub">${esc(r.nome)} · round ${r.round} · ${esc(r.mapa)}</div>
+    <div class="acoes"></div>`;
+  const ac = elFolha.querySelector(".acoes");
+  const so = estado.sel.has(r.id) && estado.sel.size === 1;
+  if (o.aoClicar) { const b = document.createElement("button"); b.className = "btn primario";
+    b.textContent = so ? "Voltar a todas" : "Ver só esta partida";
+    b.onclick = () => { fecharFolha(); if (so) estado.sel.clear(); else estado.sel = new Set([r.id]); atualizar(); };
+    ac.appendChild(b); }
+  if (ui.pagina !== "partidas" || ui.aberta !== r.id) { const b = document.createElement("button"); b.className = "btn"; b.textContent = "Abrir partida";
+    b.onclick = () => { fecharFolha(); ui.aberta = r.id; location.hash = "#partidas/" + r.id; }; ac.appendChild(b); }
+  elFolha.querySelector(".fechar").onclick = fecharFolha;
+  elFolha.classList.add("aberta");
+}
+function fecharFolha() { elFolha.classList.remove("aberta"); }
+
 function desenharMapa(el, rs, o) {
   zoomBtns(el);
   el.querySelectorAll("svg.mundo").forEach(s => s.remove());
   const focado = o.focado && rs.length > 0, enquadrar = (o.focado || o.enquadrar) && rs.length > 0;
-  const proj = d3.geoNaturalEarth1().fitExtent([[4, 4], [W - 4, H - 4]], { type: "Sphere" });
+  // O desenho usa a largura real em pixels, para os pontos terem o mesmo tamanho em qualquer tela.
+  // Em tela estreita o mapa fica mais alto e o mundo preenche a altura; arrasta-se para os lados.
+  const W = Math.max(300, Math.round(el.clientWidth || 1000)), estreito = W < 640;
+  let H = Math.round(W * (estreito ? 1 : 0.52));
+  const mundoInteiro = estreito ? [[-W, 4], [2 * W, H - 4]] : [[4, 4], [W - 4, H - 4]];
+  const proj = d3.geoNaturalEarth1().fitExtent(mundoInteiro, { type: "Sphere" });
   if (enquadrar) {
     // Enquadra locais e palpites, sem passar de 12 vezes o mundo.
     // Com filtro de país, só os locais contam; palpite do outro lado do mundo não abre a moldura.
     const pts = rs.flatMap(r => [[r.lng, r.lat], ...(focado && r.plat != null ? [[r.plng, r.plat]] : [])]);
-    const s0 = proj.scale();
-    proj.fitExtent([[50, 50], [W - 50, H - 50]], { type: "MultiPoint", coordinates: pts });
+    const s0 = proj.scale(), sMin = d3.geoNaturalEarth1().fitExtent([[4, 4], [W - 4, H - 4]], { type: "Sphere" }).scale();
+    const m = estreito ? 30 : 50;
+    proj.fitExtent([[m, m], [W - m, H - m]], { type: "MultiPoint", coordinates: pts });
+    if (estreito) {
+      // No celular a altura do quadro acompanha a altura que os pontos ocupam, sem mar sobrando.
+      const ys = pts.map(q => proj(q)[1]), alto = d3.max(ys) - d3.min(ys);
+      H = Math.round(Math.max(W * 0.56, Math.min(W, alto + 2 * m)));
+      proj.fitExtent([[m, m], [W - m, H - m]], { type: "MultiPoint", coordinates: pts });
+    }
     if (proj.scale() > s0 * 12) { const c = proj.invert([W / 2, H / 2]); proj.scale(s0 * 12).center([0, 0]).translate([W / 2, H / 2]);
       const [x, y] = proj(c); const t = proj.translate(); proj.translate([t[0] + W / 2 - x, t[1] + H / 2 - y]); }
-    if (proj.scale() < s0) proj.fitExtent([[4, 4], [W - 4, H - 4]], { type: "Sphere" });
+    // Partidas espalhadas pelo mundo: no celular cabe o mundo todo na largura, sem cortar as pontas.
+    if (proj.scale() < sMin) { if (estreito) H = Math.round(W * 0.56); proj.fitExtent([[4, 4], [W - 4, H - 4]], { type: "Sphere" }); }
   }
   const path = d3.geoPath(proj);
   const svg = d3.select(el).insert("svg", ".zoom-btns").attr("class", "mundo").attr("viewBox", `0 0 ${W} ${H}`);
-  if (!el._zoom) el._zoom = d3.zoom().scaleExtent([1, 40]).translateExtent([[-W, -H], [2 * W, 2 * H]]);
+  if (!el._zoom) el._zoom = d3.zoom().scaleExtent([1, 40]);
+  el._zoom.translateExtent([[-W, -H], [2 * W, 2 * H]]);
   el._svg = svg;
   svg.append("rect").attr("width", W).attr("height", H).attr("fill", "var(--sea)");
   const g = svg.append("g");
@@ -831,8 +912,8 @@ function desenharMapa(el, rs, o) {
     gp = g.append("g").selectAll("g").data(focado ? comPalpite : []).join("g");
     gp.append("circle").attr("r", 4).attr("fill", "#fff").attr("stroke", "var(--ink-2)").attr("stroke-width", 1.8);
     gl = g.append("g").selectAll("g").data(rs).join("g").style("cursor", "pointer");
-    gl.append("circle").attr("r", 12).attr("fill", "transparent");
-    const tam = focado ? 1 : 0.82;
+    gl.append("circle").attr("r", toque ? 18 : 12).attr("fill", "transparent");
+    const tam = (focado ? 1 : 0.82) * (toque ? 1.25 : 1);
     // Acerto é círculo azul; erro é losango laranja. A forma separa mesmo sem cor.
     gl.append("path").attr("d", r => d3.symbol(r.acertou ? d3.symbolCircle : d3.symbolDiamond, (r.acertou ? 95 : 105) * tam * tam)())
       .attr("fill", r => r.acertou ? "var(--ok)" : "var(--erro)").attr("stroke", "#fff").attr("stroke-width", 2);
@@ -841,7 +922,7 @@ function desenharMapa(el, rs, o) {
       .style("paint-order", "stroke").style("stroke", "#fff").style("stroke-width", 3.5);
     gl.on("pointermove", (ev, r) => mostrar(ev, [...linhasRound(r), ...(o.dicaClique ? [[o.dicaClique(r), "m"]] : [])]))
       .on("pointerleave", esconder)
-      .on("click", (ev, r) => { esconder(); o.aoClicar && o.aoClicar(r); });
+      .on("click", (ev, r) => { esconder(); if (toque) folha(r, o); else if (o.aoClicar) o.aoClicar(r); });
   }
   // Zoom: os pontos mantêm o tamanho na tela
   const posicionar = k => {
@@ -925,8 +1006,8 @@ document.getElementById("sel-visiveis").onclick = () => { partidasNaLista.forEac
 for (const id of ["camada", "linhas"]) document.querySelectorAll(`#${id} button`).forEach(b =>
   b.onclick = () => { ui[id] = b.dataset.v; atualizar(); });
 
-function paginaMapa(ps, rs) {
-  tiles(rs); legendaMapa();
+function paginaMapa(ps, rs, todos) {
+  tiles(todos); legendaMapa();
   document.querySelectorAll("#camada button").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.v === ui.camada)));
   document.querySelectorAll("#linhas button").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.v === ui.linhas)));
   document.getElementById("linhas").hidden = ui.camada === "paises";
@@ -950,7 +1031,7 @@ function paginaMapa(ps, rs) {
     } else if (estado.sel.has(p.id)) estado.sel.delete(p.id); else estado.sel.add(p.id);
     ultimoClique = p.id; atualizar();
   });
-  descobertas(rs);
+  descobertas(todos);
 }
 
 // Descobertas: frases tiradas do filtro atual, sem nada inventado.
@@ -998,12 +1079,15 @@ function paginaPartidas(ps) {
   document.getElementById("partidas2-sub").textContent = `${f0(lista2.length)} partida${lista2.length !== 1 ? "s" : ""}`;
   if (!ui.aberta || !partidaPorId.has(ui.aberta)) ui.aberta = lista2[0]?.id || null;
   const el = document.getElementById("lista-partidas2");
-  listaPorDia(el, lista2, p => p.id === ui.aberta, (ev, p) => abrirPartida(p.id));
+  listaPorDia(el, lista2, p => p.id === ui.aberta, (ev, p) => abrirPartida(p.id, true));
   const atual = el.querySelector(`[data-id="${ui.aberta}"]`);
   if (atual) atual.scrollIntoView({ block: "nearest" });
   detalhe(ui.aberta ? partidaPorId.get(ui.aberta) : null);
 }
-function abrirPartida(id) { ui.aberta = id; history.replaceState(null, "", "#partidas/" + id); atualizar(); }
+function abrirPartida(id, rolar) { ui.aberta = id; history.replaceState(null, "", "#partidas/" + id); atualizar();
+  // No celular o detalhe fica embaixo da lista; desce até ele.
+  if (rolar && window.innerWidth <= 1100) setTimeout(() => { const d = document.getElementById("detalhe");
+    window.scrollTo(0, d.getBoundingClientRect().top + window.scrollY - 8); }, 60); }
 document.addEventListener("keydown", ev => {
   if (ui.pagina !== "partidas" || ev.target.matches("input") || !["ArrowDown", "ArrowUp"].includes(ev.key)) return;
   const i = lista2.findIndex(p => p.id === ui.aberta), j = i + (ev.key === "ArrowDown" ? 1 : -1);
@@ -1051,7 +1135,7 @@ function paginaErros(rs) {
   document.querySelectorAll("#abas-erros .aba").forEach(b => b.setAttribute("aria-selected", String(b.dataset.aba === ui.aba)));
   const el = document.getElementById("erros-conteudo"); el.replaceChildren();
   if (!rs.length) { el.innerHTML = `<div class="card">${vazioHTML("Sem rounds no filtro.")}</div>`; return; }
-  ({ confusoes: abaConfusoes, paises: abaPaises, regioes: abaRegioes, distancia: abaDistancia })[ui.aba](el, rs);
+  ({ confusoes: abaConfusoes, placar: abaPlacar, paises: abaPaises, regioes: abaRegioes, distancia: abaDistancia })[ui.aba](el, rs);
 }
 function card(el, titulo, sub, d) {
   const c = document.createElement("div"); c.className = "card";
@@ -1091,6 +1175,24 @@ function abaConfusoes(el, rs) {
   const max2 = alvos[0]?.n || 1;
   for (const d of alvos.slice(0, 15)) linhaRanking(r2, { nome: esc(d.pp), sub: "era " + d.de.slice(0, 3).map(([p, n]) => `${esc(p)} (${n})`).join(", "),
     frac: d.n / max2, num: `<b>${d.n}×</b>` });
+}
+// Quantas vezes errei cada país, só em mapas que não são de um país só.
+function abaPlacar(el, rs) {
+  const base = rs.filter(r => !mapaDePais.has(r.mapa)), fora = rs.length - base.length;
+  const c = card(el, "Quantas vezes errei cada país",
+    `${f0(base.length)} rounds em mapas mundiais e regionais` + (fora ? `; ficaram de fora ${f0(fora)} rounds de mapas de um país só (${[...mapaDePais].join(", ")}).` : ".") +
+    " Clique num país para ver os rounds dele no mapa.", "caderno");
+  const dados = d3.rollups(base, v => ({ n: v.length, erros: v.filter(r => !r.acertou).length,
+    viz: [...d3.rollup(v.filter(r => !r.acertou && r.ppais), x => x.length, r => r.ppais)].sort((a, b) => b[1] - a[1]) }), r => r.pais)
+    .map(([pais, o]) => ({ pais, ...o })).filter(d => d.erros > 0).sort((a, b) => b.erros - a.erros || a.pais.localeCompare(b.pais));
+  const r = document.createElement("div"); r.className = "ranking"; c.appendChild(r);
+  if (!dados.length) { r.innerHTML = vazioHTML("Nenhum erro de país aqui.", "trofeu"); return; }
+  const max = dados[0].erros;
+  dados.forEach((d, i) => linhaRanking(r, { nome: `<span class="pos">${i + 1}</span>${esc(d.pais)}`,
+    sub: `de ${d.n} rounds · chutei ${d.viz.slice(0, 2).map(([p, n]) => `${esc(p)} (${n})`).join(", ")}`,
+    frac: d.erros / max, num: `<b>${d.erros}×</b> · ${fpct(d.erros / d.n)}`,
+    dica: [[d.pais], [`Errei ${d.erros} de ${d.n} rounds (${fpct(d.erros / d.n)})`], [d.viz.slice(0, 4).map(([p, n]) => `${p} ${n}×`).join(" · "), "m"]],
+    aoClicar: () => { esconder(); ui.camada = "rounds"; filtrar("pais", [d.pais]); location.hash = "#mapa"; } }));
 }
 function abaPaises(el, rs) {
   const c = card(el, "Acerto por país real", "Clique num país para filtrar só ele.", "bandeira");
@@ -1334,15 +1436,16 @@ const PAGINAS = {
 function lerHash() {
   const [pag, sub] = location.hash.replace(/^#/, "").split("/");
   ui.pagina = PAGINAS[pag] ? pag : "mapa";
-  if (ui.pagina === "erros" && sub && ["confusoes", "paises", "regioes", "distancia"].includes(sub)) ui.aba = sub;
+  if (ui.pagina === "erros" && sub && ["confusoes", "placar", "paises", "regioes", "distancia"].includes(sub)) ui.aba = sub;
   if (ui.pagina === "partidas" && sub && partidaPorId.has(sub)) ui.aberta = sub;
 }
-window.addEventListener("hashchange", () => { lerHash(); fecharPop(); atualizar(); window.scrollTo({ top: 0 }); });
+window.addEventListener("hashchange", () => { lerHash(); fecharPop(); fecharFolha(); atualizar(); window.scrollTo({ top: 0 }); });
 
 function atualizar() {
   salvar();
   const ps = partidasFiltradas();
-  const rs = roundsVisiveis(ps);
+  // A seleção de partidas vale só para o mapa; o resto do dashboard usa tudo o que está no filtro.
+  const todos = roundsDe(ps), rs = roundsVisiveis(ps);
   desenharFiltros(ps);
   if (popRender && pop.classList.contains("aberto")) {
     // Reencontra a pílula redesenhada para o popover continuar preso a ela
@@ -1360,12 +1463,15 @@ function atualizar() {
   document.getElementById("sub-pagina").textContent = s + ` ${f0(partidasTodas.length)} partidas de ${dataBR(datas[0])} a ${dataBR(datas.at(-1))}.`;
   document.getElementById("icone-pagina").innerHTML = doodle(DOODLE_PAGINA[ui.pagina]);
   document.title = `${t} · FabGuessr`;
-  if (ui.pagina === "mapa") paginaMapa(ps, rs);
+  if (ui.pagina === "mapa") paginaMapa(ps, rs, todos);
   else if (ui.pagina === "partidas") paginaPartidas(ps);
-  else if (ui.pagina === "erros") paginaErros(rs);
-  else if (ui.pagina === "evolucao") paginaEvolucao(rs);
-  else paginaRounds(rs);
+  else if (ui.pagina === "erros") paginaErros(todos);
+  else if (ui.pagina === "evolucao") paginaEvolucao(todos);
+  else paginaRounds(todos);
 }
+let timerTela = null, larguraTela = window.innerWidth;
+window.addEventListener("resize", () => { if (Math.abs(window.innerWidth - larguraTela) < 40) return;
+  larguraTela = window.innerWidth; clearTimeout(timerTela); timerTela = setTimeout(atualizar, 200); });
 lerHash();
 estado.sel = new Set(ultimas5(partidasFiltradas()));
 atualizar();
