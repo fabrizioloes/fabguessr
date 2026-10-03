@@ -1,0 +1,1375 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FabGuessr</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600&family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/topojson-client@3/dist/topojson-client.min.js"></script>
+<!-- O carimbo evita que o navegador mostre um dados.js antigo depois de rodar o R -->
+<script>document.write('<script src="dados.js?t=' + Date.now() + '"><\/script>');</script>
+<style>
+/* Tema claro só, a pedido. Cores de dado validadas pela skill dataviz (ver logs/DECISOES.md, D-010). */
+:root {
+  color-scheme: light;
+  --page: #fbf6ee; --surface: #ffffff; --surface-2: #fdfaf4;
+  --ink: #2b2a33; --ink-2: #5c5a66; --muted: #8d8a95;
+  --grid: #f0eadf; --axis: #dcd4c5; --ring: rgba(70, 55, 30, 0.10);
+  --sombra: 0 1px 2px rgba(70,55,30,.05), 0 6px 20px rgba(70,55,30,.06);
+  /* Pastéis da interface (não carregam dado) */
+  --sky: #e4effb; --mint: #def3e9; --peach: #fde7da; --butter: #fdf2cc; --lilac: #ece8fb;
+  --sky-ink: #1c5cab;
+  /* Dado */
+  --ok: #2a78d6; --erro: #eb6834;          /* acertei / errei o país, no mapa */
+  --s1: #4a3aa7; --s2: #1baf7a;            /* duelos / clássicos, nas linhas */
+  --barra: #2a78d6;                        /* série única */
+  --good-text: #0b7a0b; --bad-text: #c03535;
+  --sea: #e8f1f9; --land: #fbf6ea; --land-borda: #e3d8c3; --grat: #d8e6f3;
+  --doodle: #4b4a57;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--page); color: var(--ink); }
+body { font: 14px/1.45 "Nunito", system-ui, "Segoe UI", sans-serif; }
+h1, h2, h3, .marca-nome, .tile .valor, .aba, .nav a { font-family: "Fredoka", "Nunito", sans-serif; }
+button { font: inherit; color: inherit; }
+.n, td.n, .tnum { font-variant-numeric: tabular-nums; }
+
+/* ---------- Estrutura ---------- */
+.app { display: grid; grid-template-columns: 228px minmax(0, 1fr); min-height: 100vh; }
+.lateral { position: sticky; top: 0; height: 100vh; padding: 20px 14px; display: flex; flex-direction: column; gap: 18px;
+  background: var(--surface-2); border-right: 1px solid var(--ring); }
+.marca { display: flex; gap: 10px; align-items: center; padding: 0 6px; }
+.marca svg { width: 44px; height: 44px; flex: none; }
+.marca-nome { font-size: 19px; font-weight: 600; line-height: 1.1; }
+.marca-sub { font-size: 12px; color: var(--muted); }
+.nav { display: flex; flex-direction: column; gap: 4px; }
+.nav a { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-radius: 14px; text-decoration: none;
+  color: var(--ink-2); font-size: 15px; font-weight: 500; }
+.nav a svg { width: 26px; height: 26px; flex: none; }
+.nav a:hover { background: var(--sky); color: var(--ink); }
+.nav a[aria-current="page"] { background: var(--sky); color: var(--sky-ink); box-shadow: inset 0 0 0 1.5px #b7d3f6; }
+.nav a .qtd { margin-left: auto; font-family: "Nunito"; font-size: 12px; color: var(--muted); }
+.cartao-div { margin-top: auto; background: var(--surface); border: 1px solid var(--ring); border-radius: 18px; padding: 12px 14px;
+  position: relative; overflow: hidden; }
+.cartao-div .r { font-size: 12px; color: var(--muted); }
+.cartao-div .v { font-family: "Fredoka"; font-size: 20px; font-weight: 600; }
+.cartao-div svg { position: absolute; right: -6px; bottom: -8px; width: 74px; height: 74px; opacity: .95; }
+.ilha { display: block; width: 100%; height: 86px; }
+
+.conteudo { padding: 22px 26px 60px; min-width: 0; max-width: 1480px; }
+.topo { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; position: relative; }
+.topo .icone-pagina { width: 52px; height: 52px; flex: none; }
+.topo h1 { margin: 0; font-size: 26px; font-weight: 600; }
+.topo .sub { color: var(--ink-2); font-size: 13.5px; }
+.topo .voo { position: absolute; right: 0; top: -6px; width: 260px; height: 60px; pointer-events: none; opacity: .9; }
+.sub { color: var(--ink-2); font-size: 13px; }
+.dica { color: var(--muted); font-size: 12px; }
+
+/* ---------- Filtros ---------- */
+.filtros { position: sticky; top: 0; z-index: 20; margin: 16px -8px 18px; padding: 10px 8px;
+  background: color-mix(in srgb, var(--page) 92%, transparent); backdrop-filter: blur(6px);
+  display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.segmento { display: inline-flex; background: var(--surface); border: 1px solid var(--ring); border-radius: 999px; padding: 3px; gap: 2px; }
+.segmento button { border: 0; background: transparent; padding: 5px 11px; border-radius: 999px; cursor: pointer; color: var(--ink-2); font-weight: 600; font-size: 13px; }
+.segmento button:hover { background: var(--grid); }
+.segmento button[aria-pressed="true"] { background: var(--ink); color: #fff; }
+.pilula { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--ring); background: var(--surface);
+  border-radius: 999px; padding: 5px 8px 5px 13px; cursor: pointer; font-size: 13px; color: var(--ink-2); font-weight: 600; }
+.pilula:hover { border-color: var(--axis); }
+.pilula .val { color: var(--ink); font-weight: 700; max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pilula .seta { width: 16px; height: 16px; opacity: .55; }
+.pilula.ativa { background: var(--sky); border-color: #b7d3f6; color: var(--sky-ink); }
+.pilula .x { display: inline-grid; place-items: center; width: 18px; height: 18px; border-radius: 50%; background: rgba(28,92,171,.14);
+  font-size: 13px; line-height: 1; color: var(--sky-ink); }
+.pilula .x:hover { background: rgba(28,92,171,.28); }
+.btn { border: 1px solid var(--ring); background: var(--surface); border-radius: 999px; padding: 5px 12px; cursor: pointer;
+  font-size: 13px; font-weight: 600; color: var(--ink-2); }
+.btn:hover { border-color: var(--axis); color: var(--ink); }
+.btn.primario { background: var(--ink); color: #fff; border-color: var(--ink); }
+.btn.link { border-color: transparent; background: transparent; color: var(--sky-ink); padding: 5px 8px; }
+.btn.link:hover { background: var(--sky); }
+.chip-sel { display: inline-flex; gap: 6px; align-items: center; font-size: 13px; font-weight: 700; padding: 4px 5px 4px 12px;
+  border-radius: 999px; background: var(--butter); color: #6b5300; border: 1px solid #f3df97; }
+.chip-sel button { border: 0; background: rgba(107,83,0,.12); border-radius: 50%; width: 20px; height: 20px; cursor: pointer; color: #6b5300; }
+
+/* Popover dos filtros */
+#pop { position: fixed; z-index: 50; display: none; width: 290px; max-width: calc(100vw - 24px); background: var(--surface);
+  border: 1px solid var(--ring); border-radius: 18px; box-shadow: 0 14px 40px rgba(70,55,30,.18); padding: 10px; }
+#pop.aberto { display: block; }
+#pop .cab { display: flex; align-items: center; gap: 6px; padding: 2px 4px 8px; }
+#pop .cab b { font-family: "Fredoka"; font-size: 15px; font-weight: 600; }
+#pop .cab .btn { margin-left: auto; }
+#pop input[type="search"], #pop input[type="date"] { width: 100%; }
+#pop .opcoes { max-height: 300px; overflow-y: auto; margin-top: 6px; }
+#pop .op { display: flex; align-items: center; gap: 9px; padding: 6px 8px; border-radius: 10px; cursor: pointer; font-size: 13.5px; }
+#pop .op:hover { background: var(--page); }
+#pop .op .caixa { width: 18px; height: 18px; border-radius: 6px; border: 1.5px solid var(--axis); display: grid; place-items: center; flex: none; background: #fff; }
+#pop .op[aria-checked="true"] .caixa { background: var(--ok); border-color: var(--ok); }
+#pop .op[aria-checked="true"] .caixa::after { content: ""; width: 9px; height: 5px; border: 2px solid #fff; border-top: 0; border-right: 0; transform: rotate(-45deg) translate(1px, -1px); }
+#pop .op .nome { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#pop .op .n { color: var(--muted); font-size: 12px; }
+#pop .op .so { visibility: hidden; font-size: 11.5px; color: var(--sky-ink); font-weight: 700; padding: 1px 6px; border-radius: 6px; }
+#pop .op:hover .so { visibility: visible; }
+#pop .op .so:hover { background: var(--sky); }
+#pop .op.zero { opacity: .5; }
+#pop .rodape { display: flex; gap: 6px; padding-top: 8px; margin-top: 6px; border-top: 1px solid var(--grid); }
+#pop .datas { display: grid; gap: 8px; padding: 4px; }
+#pop .datas label { display: grid; gap: 3px; font-size: 12px; color: var(--muted); }
+input[type="date"], input[type="search"] { font: inherit; font-size: 13px; padding: 6px 12px; border-radius: 12px;
+  border: 1px solid var(--ring); background: var(--surface-2); color: var(--ink); outline: none; }
+input[type="search"]:focus, input[type="date"]:focus { border-color: #9ec5f4; box-shadow: 0 0 0 3px var(--sky); }
+
+/* ---------- Cartões ---------- */
+.card { background: var(--surface); border: 1px solid var(--ring); border-radius: 22px; padding: 18px 20px; box-shadow: var(--sombra); min-width: 0; }
+.card h2 { font-size: 17px; font-weight: 600; margin: 0 0 2px; display: flex; align-items: center; gap: 8px; }
+.card h2 svg { width: 26px; height: 26px; }
+.card .sub { margin-bottom: 12px; }
+.grade-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(460px, 100%), 1fr)); gap: 16px; }
+.pilha { display: grid; gap: 16px; }
+.cab-card { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; flex-wrap: wrap; }
+
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(170px, 100%), 1fr)); gap: 12px; margin-bottom: 16px; }
+.tile { border-radius: 20px; padding: 14px 16px; position: relative; overflow: hidden; border: 1px solid var(--ring); background: var(--surface); }
+.tile:nth-child(1) { background: var(--sky); } .tile:nth-child(2) { background: var(--mint); }
+.tile:nth-child(3) { background: var(--peach); } .tile:nth-child(4) { background: var(--lilac); }
+.tile:nth-child(5) { background: var(--butter); }
+.tile .label { color: var(--ink-2); font-size: 13px; font-weight: 700; }
+.tile .valor { font-size: 30px; font-weight: 600; margin-top: 2px; line-height: 1.15; }
+.tile .nota { color: var(--ink-2); font-size: 12px; margin-top: 2px; max-width: 75%; }
+.tile svg { position: absolute; right: 6px; bottom: 4px; width: 50px; height: 50px; opacity: .9; }
+
+/* ---------- Mapa ---------- */
+.mapa-partidas { display: grid; grid-template-columns: minmax(0, 1fr) 330px; gap: 18px; }
+.barra-mapa { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin: 4px 0 10px; }
+.legenda { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12.5px; color: var(--ink-2); align-items: center; }
+.legenda i { display: inline-block; vertical-align: middle; margin-right: 5px; }
+.legenda .dot { width: 10px; height: 10px; border-radius: 50%; }
+.legenda .losango { width: 9px; height: 9px; transform: rotate(45deg); }
+.legenda .ln { width: 16px; height: 3px; border-radius: 2px; }
+.legenda .rampa { display: inline-flex; gap: 2px; vertical-align: middle; margin: 0 5px; }
+.legenda .rampa b { width: 16px; height: 10px; border-radius: 3px; display: block; }
+.mapa { position: relative; border-radius: 18px; overflow: hidden; background: var(--sea); box-shadow: inset 0 0 0 1px var(--ring); }
+.mapa svg { display: block; width: 100%; height: auto; cursor: grab; touch-action: none; }
+.mapa svg:active { cursor: grabbing; }
+.zoom-btns { position: absolute; right: 10px; top: 10px; display: flex; flex-direction: column; gap: 6px; }
+.zoom-btns button { width: 32px; height: 32px; border-radius: 12px; border: 1px solid var(--ring); background: var(--surface);
+  color: var(--ink-2); cursor: pointer; font-size: 16px; line-height: 1; box-shadow: var(--sombra); }
+.zoom-btns button:hover { color: var(--ink); border-color: var(--axis); }
+.rosa { position: absolute; left: 10px; bottom: 8px; width: 56px; height: 56px; pointer-events: none; opacity: .85; }
+
+.partidas { display: flex; flex-direction: column; min-height: 0; }
+.partidas .busca-linha { display: flex; gap: 4px; align-items: center; margin: 8px 0 6px; flex-wrap: wrap; }
+.partidas input[type="search"] { flex: 1; min-width: 130px; }
+.lista-partidas { overflow-y: auto; max-height: 480px; padding-right: 4px; }
+.dia { position: sticky; top: 0; z-index: 1; background: var(--surface); font-size: 12px; font-weight: 800; color: var(--muted);
+  text-transform: uppercase; letter-spacing: .04em; padding: 10px 6px 4px; display: flex; justify-content: space-between; }
+.partida { display: grid; grid-template-columns: 1fr auto; gap: 2px 8px; align-items: center; padding: 8px 10px; margin: 2px 0;
+  border-radius: 14px; cursor: pointer; user-select: none; border: 1.5px solid transparent; }
+.partida:hover { background: var(--page); }
+.partida[aria-selected="true"] { background: var(--sky); border-color: #b7d3f6; }
+.partida .t1 { font-weight: 800; font-size: 13.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.partida .t2 { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.partida .bolinhas { grid-column: 1 / -1; display: flex; gap: 3px; margin-top: 2px; }
+.bolinhas i { width: 8px; height: 8px; border-radius: 50%; background: var(--ok); }
+.bolinhas i.e { background: var(--erro); border-radius: 2px; transform: rotate(45deg) scale(.85); }
+.selo { font-size: 11.5px; font-weight: 800; padding: 2px 9px; border-radius: 999px; white-space: nowrap; }
+.selo.v { background: var(--mint); color: var(--good-text); }
+.selo.d { background: #fde3e0; color: var(--bad-text); }
+.selo.p { background: var(--grid); color: var(--ink-2); }
+
+/* Descobertas */
+.descobertas { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(250px, 100%), 1fr)); gap: 14px; margin-top: 16px; }
+.descoberta { display: grid; grid-template-columns: 54px 1fr; gap: 12px; align-items: start; }
+.descoberta svg { width: 54px; height: 54px; }
+.descoberta .k { font-size: 12px; font-weight: 800; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+.descoberta .t { font-size: 14.5px; margin: 2px 0 6px; }
+.descoberta .t b { font-weight: 800; }
+
+/* ---------- Partidas (página) ---------- */
+.partidas-pag { display: grid; grid-template-columns: 360px minmax(0, 1fr); gap: 18px; align-items: start; }
+.partidas-pag .lista-partidas { max-height: calc(100vh - 230px); }
+.detalhe .titulo { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.detalhe .titulo h2 { font-size: 22px; margin: 0; }
+.etiquetas { display: flex; gap: 6px; flex-wrap: wrap; margin: 8px 0 14px; }
+.etiqueta { font-size: 12px; font-weight: 700; padding: 3px 10px; border-radius: 999px; background: var(--page); color: var(--ink-2); border: 1px solid var(--ring); }
+.navega { margin-left: auto; display: flex; gap: 6px; }
+.resumo-partida { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; margin: 14px 0; }
+.resumo-partida div { background: var(--page); border-radius: 14px; padding: 10px 12px; }
+.resumo-partida .r { font-size: 12px; color: var(--muted); font-weight: 700; }
+.resumo-partida .v { font-family: "Fredoka"; font-size: 20px; font-weight: 600; }
+
+/* ---------- Abas ---------- */
+.abas { display: inline-flex; gap: 4px; background: var(--surface); border: 1px solid var(--ring); border-radius: 18px; padding: 4px; margin-bottom: 16px; flex-wrap: wrap; }
+.aba { border: 0; background: transparent; padding: 8px 16px; border-radius: 14px; cursor: pointer; font-size: 15px; font-weight: 500;
+  color: var(--ink-2); display: inline-flex; align-items: center; gap: 7px; }
+.aba svg { width: 22px; height: 22px; }
+.aba:hover { background: var(--page); }
+.aba[aria-selected="true"] { background: var(--peach); color: #8a3a12; }
+
+/* Linhas de ranking (confusões, países) */
+.ranking { display: grid; gap: 2px; }
+.rk { display: grid; grid-template-columns: minmax(150px, 1.3fr) minmax(120px, 2fr) auto; gap: 12px; align-items: center;
+  padding: 7px 10px; border-radius: 12px; cursor: pointer; }
+.rk:hover { background: var(--page); }
+.rk .nome { font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rk .nome small { display: block; font-weight: 600; color: var(--muted); font-size: 11.5px; }
+.rk .trilho { height: 12px; background: var(--grid); border-radius: 4px; position: relative; }
+.rk .trilho b { position: absolute; left: 0; top: 0; bottom: 0; background: var(--barra); border-radius: 0 4px 4px 0; }
+.rk .num { font-size: 12.5px; color: var(--ink-2); text-align: right; white-space: nowrap; }
+.rk .num b { color: var(--ink); font-size: 13.5px; }
+.ordem { display: flex; gap: 8px; align-items: center; margin-bottom: 10px; flex-wrap: wrap; }
+
+.bussola { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; max-width: 380px; margin: 6px auto 0; }
+.bussola div { aspect-ratio: 1.15; border-radius: 16px; display: grid; place-content: center; text-align: center; cursor: default; border: 2px solid #fff; }
+.bussola .s { font-family: "Fredoka"; font-size: 18px; font-weight: 600; }
+.bussola .p { font-size: 13px; font-weight: 800; }
+.bussola .q { font-size: 11px; opacity: .85; }
+
+/* ---------- Gráficos ---------- */
+svg { overflow: visible; }
+.grafico svg { display: block; width: 100%; height: auto; }
+svg text { fill: var(--muted); font-size: 11px; font-family: "Nunito", sans-serif; }
+.grade line { stroke: var(--grid); }
+
+/* ---------- Tabela ---------- */
+.tabela-wrap { overflow: auto; max-height: calc(100vh - 260px); border-radius: 14px; }
+table { border-collapse: collapse; width: 100%; font-size: 12.5px; }
+th { position: sticky; top: 0; background: var(--surface); text-align: left; font-weight: 800; color: var(--ink-2);
+  border-bottom: 1.5px solid var(--axis); padding: 8px; white-space: nowrap; cursor: pointer; user-select: none; }
+th:hover { color: var(--ink); }
+th .ord { color: var(--sky-ink); }
+td { padding: 6px 8px; border-bottom: 1px solid var(--grid); white-space: nowrap; }
+td.n, th.n { text-align: right; }
+tbody tr:hover td { background: var(--page); }
+tr.clicavel { cursor: pointer; }
+.ok { color: var(--good-text); font-weight: 700; } .no { color: var(--bad-text); font-weight: 700; }
+
+/* ---------- Tooltip e vazio ---------- */
+#tip { position: fixed; pointer-events: none; background: var(--surface); color: var(--ink); border: 1px solid var(--ring);
+  border-radius: 14px; padding: 9px 12px; font-size: 12.5px; box-shadow: 0 8px 26px rgba(70,55,30,.16); opacity: 0;
+  max-width: 290px; z-index: 60; transition: opacity .08s; }
+#tip b { font-size: 13.5px; font-weight: 800; }
+#tip .m { color: var(--ink-2); }
+.vazio { color: var(--muted); padding: 28px 10px; text-align: center; }
+.vazio svg { width: 70px; height: 70px; display: block; margin: 0 auto 6px; }
+
+[hidden] { display: none !important; }
+
+@media (max-width: 1100px) {
+  .mapa-partidas, .partidas-pag { grid-template-columns: 1fr; }
+  .partidas-pag .lista-partidas { max-height: 420px; }
+}
+@media (max-width: 760px) {
+  .app { grid-template-columns: 1fr; }
+  .lateral { position: fixed; z-index: 30; top: auto; bottom: 0; left: 0; right: 0; height: auto; padding: 6px 8px;
+    flex-direction: row; border-right: 0; border-top: 1px solid var(--ring); }
+  .marca, .cartao-div, .ilha { display: none; }
+  .nav { flex-direction: row; width: 100%; justify-content: space-around; }
+  .nav a { flex-direction: column; gap: 2px; font-size: 11px; padding: 6px 8px; }
+  .nav a .qtd { display: none; }
+  .conteudo { padding: 16px 16px 90px; }
+  .topo .voo { display: none; }
+  .rk { grid-template-columns: 1fr auto; } .rk .trilho { grid-column: 1 / -1; grid-row: 2; }
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="lateral">
+    <div class="marca"><span data-d="globo"></span>
+      <div><div class="marca-nome">FabGuessr</div><div class="marca-sub">track record</div></div></div>
+    <nav class="nav" aria-label="Páginas">
+      <a href="#mapa" data-pag="mapa"><span data-d="pino"></span>Mapa</a>
+      <a href="#partidas" data-pag="partidas"><span data-d="mala"></span>Partidas<span class="qtd" id="qtd-partidas"></span></a>
+      <a href="#erros" data-pag="erros"><span data-d="binoculo"></span>Erros</a>
+      <a href="#evolucao" data-pag="evolucao"><span data-d="montanha"></span>Evolução</a>
+      <a href="#rounds" data-pag="rounds"><span data-d="caderno"></span>Rounds<span class="qtd" id="qtd-rounds"></span></a>
+    </nav>
+    <div class="cartao-div"><div class="r">Divisão atual</div><div class="v" id="divisao"></div>
+      <div class="r" id="gerado"></div><span data-d="trofeu"></span></div>
+    <span class="ilha" data-d="ilha"></span>
+  </aside>
+
+  <main class="conteudo">
+    <header class="topo">
+      <span class="icone-pagina" id="icone-pagina"></span>
+      <div><h1 id="titulo-pagina"></h1><div class="sub" id="sub-pagina"></div></div>
+      <span class="voo" data-d="voo"></span>
+    </header>
+
+    <section class="filtros" aria-label="Filtros" id="filtros"></section>
+
+    <!-- MAPA -->
+    <section data-pagina="mapa">
+      <div class="tiles" id="tiles"></div>
+      <div class="card">
+        <div class="mapa-partidas">
+          <div>
+            <div class="cab-card">
+              <div><h2>Onde foram os rounds</h2><div class="sub" id="mapa-sub"></div></div>
+            </div>
+            <div class="barra-mapa">
+              <div class="segmento" id="camada">
+                <button data-v="rounds">Rounds</button><button data-v="paises">Acerto por país</button></div>
+              <div class="segmento" id="linhas">
+                <button data-v="sim">Com linhas</button><button data-v="nao">Só pontos</button></div>
+              <div class="legenda" id="legenda-mapa"></div>
+            </div>
+            <div class="mapa" id="mapa"></div>
+          </div>
+          <div class="partidas">
+            <div class="cab-card"><h2>Partidas</h2><span class="sub" id="partidas-sub"></span></div>
+            <div class="dica">Clique para ver só ela no mapa. Shift seleciona um intervalo.</div>
+            <div class="busca-linha">
+              <input type="search" id="partidas-busca" placeholder="Buscar mapa, país, data">
+              <button class="btn link" id="sel-visiveis">Todas</button>
+              <button class="btn link" id="sel-limpar">Limpar</button>
+            </div>
+            <div class="lista-partidas" id="lista-partidas" role="listbox" aria-multiselectable="true"></div>
+          </div>
+        </div>
+      </div>
+      <div class="descobertas" id="descobertas"></div>
+    </section>
+
+    <!-- PARTIDAS -->
+    <section data-pagina="partidas" hidden>
+      <div class="partidas-pag">
+        <div class="card partidas">
+          <div class="cab-card"><h2>Todas as partidas</h2><span class="sub" id="partidas2-sub"></span></div>
+          <div class="busca-linha"><input type="search" id="partidas2-busca" placeholder="Buscar mapa, país, data"></div>
+          <div class="dica">Setas ↑ ↓ andam pela lista.</div>
+          <div class="lista-partidas" id="lista-partidas2" role="listbox"></div>
+        </div>
+        <div class="card detalhe" id="detalhe"></div>
+      </div>
+    </section>
+
+    <!-- ERROS -->
+    <section data-pagina="erros" hidden>
+      <div class="abas" role="tablist" id="abas-erros">
+        <button class="aba" data-aba="confusoes" role="tab"><span data-d="setas"></span>Confusões</button>
+        <button class="aba" data-aba="paises" role="tab"><span data-d="bandeira"></span>Países</button>
+        <button class="aba" data-aba="regioes" role="tab"><span data-d="bussola"></span>Regiões</button>
+        <button class="aba" data-aba="distancia" role="tab"><span data-d="regua"></span>Distância</button>
+      </div>
+      <div id="erros-conteudo"></div>
+    </section>
+
+    <!-- EVOLUÇÃO -->
+    <section data-pagina="evolucao" hidden>
+      <div class="grade-2">
+        <div class="card"><h2 id="evo-pontos-t">Média de pontos por round</h2>
+          <div class="legenda" style="margin-bottom:8px"><span><i class="ln" style="background:var(--s1)"></i>Duelos</span>
+            <span><i class="ln" style="background:var(--s2)"></i>Clássicos e desafios</span></div>
+          <div class="grafico" id="evo-pontos"></div></div>
+        <div class="card"><h2 id="evo-acerto-t">Acerto de país</h2>
+          <div class="legenda" style="margin-bottom:8px"><span><i class="ln" style="background:var(--s1)"></i>Duelos</span>
+            <span><i class="ln" style="background:var(--s2)"></i>Clássicos e desafios</span></div>
+          <div class="grafico" id="evo-acerto"></div></div>
+        <div class="card"><h2>Rating nos duelos ranqueados 1v1</h2>
+          <div class="sub">Rating no início de cada duelo, em ordem de jogo. A API não guarda o rating dos duelos até fev/2026.</div>
+          <div class="grafico" id="evo-rating"></div></div>
+        <div class="card"><h2>Rounds jogados</h2><div class="sub" id="evo-volume-sub"></div>
+          <div class="grafico" id="evo-volume"></div></div>
+      </div>
+    </section>
+
+    <!-- ROUNDS -->
+    <section data-pagina="rounds" hidden>
+      <div class="card">
+        <div class="cab-card"><div><h2>Todos os rounds</h2><div class="sub" id="tabela-sub"></div></div>
+          <input type="search" id="rounds-busca" placeholder="Buscar país, mapa, partida" style="min-width:240px"></div>
+        <div class="tabela-wrap" style="margin-top:10px"><table id="tabela"></table></div>
+      </div>
+    </section>
+  </main>
+</div>
+<div id="pop" role="dialog"></div>
+<div id="tip" role="tooltip"></div>
+
+<script>
+// ===========================================================================
+// Desenhinhos. Traço único, preenchimento pastel. viewBox 0 0 64 64.
+// ===========================================================================
+const TR = 'fill="none" stroke="var(--doodle)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"';
+const DOODLES = {
+  globo: `<circle cx="32" cy="30" r="20" fill="#e4effb" stroke="var(--doodle)" stroke-width="2.4"/>
+    <path d="M18 22c5 2 6 6 11 5s4 5 9 4M24 44c1-5 6-6 5-10s5-5 9-3M40 14c-2 4 2 6 6 6" fill="none" stroke="#1baf7a" stroke-width="2.4" stroke-linecap="round"/>
+    <ellipse cx="32" cy="30" rx="9" ry="20" ${TR} stroke-width="1.6" opacity=".55"/><path d="M12 30h40" ${TR} stroke-width="1.6" opacity=".55"/>
+    <path d="M14 46c4 6 11 9 18 9M32 55v5M24 60h16" ${TR}/>`,
+  pino: `<path d="M32 58S14 38 14 25a18 18 0 0 1 36 0c0 13-18 33-18 33z" fill="#fde7da" ${TR.replace('fill="none" ', '')}/>
+    <circle cx="32" cy="25" r="7" fill="#fff" ${TR.replace('fill="none" ', '')}/>`,
+  mala: `<rect x="10" y="20" width="44" height="32" rx="7" fill="#fdf2cc" ${TR.replace('fill="none" ', '')}/>
+    <path d="M24 20v-5a3 3 0 0 1 3-3h10a3 3 0 0 1 3 3v5M10 33h44M22 20v32M42 20v32" ${TR}/>`,
+  binoculo: `<circle cx="20" cy="40" r="11" fill="#ece8fb" ${TR.replace('fill="none" ', '')}/><circle cx="44" cy="40" r="11" fill="#ece8fb" ${TR.replace('fill="none" ', '')}/>
+    <path d="M14 30l4-14h6l3 12M50 30l-4-14h-6l-3 12M27 30h10" ${TR}/><circle cx="20" cy="40" r="4" fill="#fff" ${TR.replace('fill="none" ', '')} stroke-width="1.6"/><circle cx="44" cy="40" r="4" fill="#fff" ${TR.replace('fill="none" ', '')} stroke-width="1.6"/>`,
+  montanha: `<path d="M4 52l18-30 10 14 8-12 20 28z" fill="#def3e9" ${TR.replace('fill="none" ', '')}/>
+    <path d="M17 30l5-8 5 7-3 2-2-2-3 3zM36 30l4-6 4 6-2 1-2-2-2 2z" fill="#fff" ${TR.replace('fill="none" ', '')} stroke-width="1.8"/>
+    <circle cx="50" cy="14" r="5" fill="#fdf2cc" ${TR.replace('fill="none" ', '')}/>`,
+  caderno: `<rect x="14" y="8" width="38" height="48" rx="6" fill="#e4effb" ${TR.replace('fill="none" ', '')}/>
+    <path d="M22 20h22M22 29h22M22 38h14M10 16h6M10 26h6M10 36h6M10 46h6" ${TR}/>`,
+  trofeu: `<path d="M20 10h24v14a12 12 0 0 1-24 0z" fill="#fdf2cc" ${TR.replace('fill="none" ', '')}/>
+    <path d="M20 14h-7a7 7 0 0 0 9 11M44 14h7a7 7 0 0 1-9 11M32 36v8M22 52h20l-3-8H25z" ${TR}/>`,
+  ilha: `<svg viewBox="0 0 200 86"><path d="M10 74c20-6 40-6 60 0s40 6 60 0 40-6 60 0" ${TR} stroke="#9ec5f4"/>
+    <path d="M30 82c15-4 30-4 45 0" ${TR} stroke="#b7d3f6"/>
+    <path d="M70 70c8-14 52-14 60 0z" fill="#fdf2cc" ${TR.replace('fill="none" ', '')}/>
+    <path d="M100 66c-2-14 0-28 6-38" ${TR}/>
+    <path d="M106 28c-8-6-18-4-22 2 8-1 14 0 22-2zM106 28c4-9 14-12 22-8-8 2-14 4-22 8zM106 28c10-2 18 3 20 10-7-4-13-6-20-10zM106 28c-6 2-12 8-12 16 4-7 8-11 12-16z" fill="#def3e9" ${TR.replace('fill="none" ', '')} stroke-width="2"/>
+    <path d="M150 22c0-6 8-8 11-3 2-5 11-4 11 2 5 0 6 7 0 7h-20c-5 0-6-6-2-6z" fill="#fff" ${TR.replace('fill="none" ', '')} stroke-width="2"/>
+    <path d="M30 40l10 4-10 4 2-4z" fill="#fff" ${TR.replace('fill="none" ', '')} stroke-width="1.8"/></svg>`,
+  voo: `<svg viewBox="0 0 260 60"><path d="M6 50C60 50 90 14 150 22s70 18 84 8" ${TR} stroke-width="2" stroke-dasharray="4 7" opacity=".55"/>
+    <path d="M232 16l22 8-22 8 5-8z" fill="#fff" ${TR.replace('fill="none" ', '')} stroke-width="2"/><path d="M237 24h17" ${TR} stroke-width="1.6"/>
+    <circle cx="6" cy="50" r="4" fill="#fde7da" ${TR.replace('fill="none" ', '')} stroke-width="2"/></svg>`,
+  bussola: `<circle cx="32" cy="32" r="22" fill="#fdf2cc" ${TR.replace('fill="none" ', '')}/>
+    <path d="M32 14l6 18-6 18-6-18z" fill="#fff" ${TR.replace('fill="none" ', '')} stroke-width="2"/><path d="M32 14l6 18H26z" fill="#eb6834" stroke="var(--doodle)" stroke-width="2" stroke-linejoin="round"/>
+    <circle cx="32" cy="32" r="2.5" fill="var(--doodle)"/>`,
+  setas: `<path d="M10 22h36l-8-8M54 42H18l8 8" ${TR}/><circle cx="50" cy="22" r="5" fill="#fde7da" ${TR.replace('fill="none" ', '')}/><circle cx="14" cy="42" r="5" fill="#e4effb" ${TR.replace('fill="none" ', '')}/>`,
+  bandeira: `<path d="M16 58V8" ${TR}/><path d="M16 10c10-5 18 5 30 0v24c-12 5-20-5-30 0z" fill="#def3e9" ${TR.replace('fill="none" ', '')}/>`,
+  regua: `<rect x="6" y="22" width="52" height="20" rx="5" fill="#ece8fb" ${TR.replace('fill="none" ', '')}/>
+    <path d="M14 22v8M22 22v5M30 22v8M38 22v5M46 22v8" ${TR} stroke-width="2"/>`,
+  rosa: `<circle cx="32" cy="32" r="24" fill="rgba(255,255,255,.75)" ${TR.replace('fill="none" ', '')} stroke-width="1.6"/>
+    <path d="M32 8l5 24-5 24-5-24z" fill="#fff" ${TR.replace('fill="none" ', '')} stroke-width="1.6"/><path d="M8 32l24-5 24 5-24 5z" fill="#fff" ${TR.replace('fill="none" ', '')} stroke-width="1.6"/>
+    <path d="M32 8l5 24h-10z" fill="#eb6834" stroke="var(--doodle)" stroke-width="1.6" stroke-linejoin="round"/>
+    <text x="32" y="6" text-anchor="middle" style="font: 700 9px Fredoka; fill: var(--doodle)">N</text>`,
+  camera: `<rect x="8" y="20" width="48" height="32" rx="8" fill="#e4effb" ${TR.replace('fill="none" ', '')}/>
+    <path d="M22 20l4-7h12l4 7" ${TR}/><circle cx="32" cy="36" r="9" fill="#fff" ${TR.replace('fill="none" ', '')}/><circle cx="47" cy="27" r="1.8" fill="var(--doodle)"/>`,
+  barco: `<path d="M10 42h44l-6 10H16z" fill="#fde7da" ${TR.replace('fill="none" ', '')}/><path d="M32 42V10l16 26H32" fill="#fff" ${TR.replace('fill="none" ', '')}/>
+    <path d="M32 16L20 36h12" fill="#def3e9" ${TR.replace('fill="none" ', '')}/><path d="M6 58c6-3 10-3 16 0s10 3 16 0 10-3 16 0" ${TR} stroke="#9ec5f4"/>`,
+  aviao: `<path d="M8 34l48-20-14 40-8-16z" fill="#fff" ${TR.replace('fill="none" ', '')}/><path d="M34 38l22-24" ${TR}/>
+    <path d="M6 50c6 0 8-4 14-4" ${TR} stroke-dasharray="2 5" opacity=".6"/>`,
+  nuvem: `<path d="M16 44c-8 0-9-11-1-12 0-9 12-12 16-5 3-7 15-6 15 3 8 0 9 14 0 14z" fill="#fff" ${TR.replace('fill="none" ', '')}/>`
+};
+const DOODLE_PAGINA = { mapa: "globo", partidas: "mala", erros: "binoculo", evolucao: "montanha", rounds: "caderno" };
+function doodle(nome) { const s = DOODLES[nome] || ""; return s.trim().startsWith("<svg") ? s : `<svg viewBox="0 0 64 64" aria-hidden="true">${s}</svg>`; }
+function pintarDoodles(raiz = document) { raiz.querySelectorAll("[data-d]").forEach(el => { if (!el.firstChild) el.innerHTML = doodle(el.dataset.d); }); }
+pintarDoodles();
+const vazioHTML = (txt, d = "binoculo") => `<div class="vazio">${doodle(d)}${txt}</div>`;
+
+// ===========================================================================
+// Dados
+// ===========================================================================
+const T = window.TRACK;
+const fmt = d3.formatLocale({ decimal: ",", thousands: ".", grouping: [3], currency: ["R$", ""] });
+const f0 = fmt.format(",.0f"), fpct = fmt.format(".0%"), f1 = fmt.format(",.1f");
+const NA = "·";
+const dataBR = d => d.split("-").reverse().join("/");
+const dataCurta = d => { const [a, m, dd] = d.split("-"); return `${dd}/${m}/${a.slice(2)}`; };
+const pad2 = n => String(n).padStart(2, "0");
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+const jogoDuelo = r => (r.formato === "2v2" ? "Duelo 2v2" : "Duelo 1v1");
+const jogoClassico = r => r.origem === "Live Challenge" ? "Live Challenge"
+  : (r.origem || "Partida").startsWith("Desafio") ? "Desafio" : "Clássico";
+// Nome curto da partida: tipo, número do dia e data. "Duelo 03 · 02/10/26"
+const ROTULO = { "Duelo 1v1": "Duelo", "Duelo 2v2": "Duelo 2v2", "Clássico": "Clássico", "Desafio": "Desafio", "Live Challenge": "Live" };
+
+const rounds = [
+  ...T.duelos.map(r => ({ grupo: "Duelo", jogo: jogoDuelo(r), id: r.id_duelo, data: r.data, hora: r.hora,
+    modo: r.modo, mapa: r.mapa || "(sem nome)", round: r.id_round, pais: r.pais, regiao: r.regiao, km: r.meu_palpite_km,
+    ppais: r.meu_palpite_pais, pregiao: r.meu_palpite_regiao, pontos: r.meus_pontos,
+    acertou: r.acertei_pais === "Sim", ganhouRound: r.ganhei_round, ganhouJogo: r.ganhei_jogo,
+    rating: r.meu_rating, ratingOp: r.rating_oponente, tipo: r.tipo, divisao: r.divisao, formato: r.formato || "1v1",
+    pontosOp: r.pontos_oponente, lat: r.lat, lng: r.lng, plat: r.palpite_lat, plng: r.palpite_lng })),
+  ...T.classicos.map(r => ({ grupo: "Clássico", jogo: jogoClassico(r), id: r.id_classic, data: r.data, hora: r.hora,
+    modo: r.modo, mapa: r.nome_mapa || "(sem nome)", round: r.id_round, pais: r.pais, regiao: r.regiao, km: r.meu_palpite_km,
+    ppais: r.meu_palpite_pais, pregiao: r.meu_palpite_regiao, pontos: r.meus_pontos,
+    acertou: r.acertei_pais === "Sim", total: r.pontos_feitos, tipoMapa: r.tipo_mapa, origem: r.origem || "Partida",
+    tempo: r.tempo_s, lat: r.lat, lng: r.lng, plat: r.palpite_lat, plng: r.palpite_lng }))
+].sort((a, b) => (a.data + a.hora + a.id).localeCompare(b.data + b.hora + b.id) || a.round - b.round);
+const regiaoCerta = r => r.acertou && r.regiao && r.pregiao ? r.regiao === r.pregiao : null;
+
+const partidasTodas = d3.groups(rounds, r => r.id).map(([id, rs]) => {
+  const p = rs[0];
+  return { id, rs, grupo: p.grupo, jogo: p.jogo, data: p.data, hora: p.hora, modo: p.modo, mapa: p.mapa,
+    tipo: p.tipo, ganhou: p.ganhouJogo, total: p.total, rating: p.rating, ratingOp: p.ratingOp, divisao: p.divisao,
+    formato: p.formato, origem: p.origem, paises: new Set(rs.map(r => r.pais)),
+    pontos: d3.sum(rs, r => r.pontos), acertos: d3.sum(rs, r => r.acertou), n: rs.length };
+}).sort((a, b) => (a.data + a.hora + a.id).localeCompare(b.data + b.hora + b.id));
+// Numeração do dia, em ordem de jogo, separada por tipo
+{ const cont = new Map();
+  for (const p of partidasTodas) { const k = p.data + "|" + ROTULO[p.jogo]; cont.set(k, (cont.get(k) || 0) + 1);
+    p.num = cont.get(k); p.nome = `${ROTULO[p.jogo]} ${pad2(p.num)} · ${dataCurta(p.data)}`; } }
+partidasTodas.reverse();   // mais recente primeiro
+for (const p of partidasTodas) {
+  p.busca = [p.nome, p.mapa, p.jogo, p.modo, p.tipo || "", dataBR(p.data), ...p.paises].join(" ").toLowerCase();
+  for (const r of p.rs) r.nome = p.nome;
+}
+const partidaPorId = new Map(partidasTodas.map(p => [p.id, p]));
+const resultadoDe = p => p.grupo !== "Duelo" ? null : p.ganhou === "Sim" ? "Vitória" : p.ganhou === "Empate" ? "Empate" : "Derrota";
+
+const datas = rounds.map(r => r.data).sort();
+document.getElementById("divisao").textContent = T.divisaoAtual || NA;
+document.getElementById("gerado").textContent = `dados de ${T.geradoEm.split(" ")[0].split("-").reverse().join("/")}`;
+
+// ===========================================================================
+// Filtros. Cada filtro de várias opções guarda o conjunto ligado; todas ligadas = sem filtro.
+// ===========================================================================
+const todosMapas = [...d3.rollup(partidasTodas, v => v.length, p => p.mapa)].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(d => d[0]);
+const todosPaises = [...d3.rollup(rounds, v => v.length, r => r.pais)].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(d => d[0]);
+const FILTROS = [
+  { k: "jogo", nome: "Jogo", opcoes: ["Duelo 1v1", "Duelo 2v2", "Clássico", "Desafio", "Live Challenge"], minimo: true,
+    conta: (ps, v) => ps.filter(p => p.jogo === v).length },
+  { k: "modo", nome: "Modo", opcoes: ["Moving", "NM", "NMPZ"], minimo: true, conta: (ps, v) => ps.filter(p => p.modo === v).length },
+  { k: "tipo", nome: "Duelo", opcoes: ["Ranqueado", "Não ranqueado", "Party"], minimo: true,
+    conta: (ps, v) => ps.filter(p => p.grupo === "Duelo" && p.tipo === v).length },
+  { k: "resultado", nome: "Resultado", opcoes: ["Vitória", "Derrota"], minimo: true,
+    conta: (ps, v) => ps.filter(p => resultadoDe(p) === v || (v === "Derrota" && resultadoDe(p) === "Empate")).length },
+  { k: "mapas", nome: "Mapa", opcoes: todosMapas, busca: true, conta: (ps, v) => ps.filter(p => p.mapa === v).length },
+  { k: "pais", nome: "País", opcoes: todosPaises, busca: true, unidade: "rounds",
+    conta: (ps, v) => d3.sum(ps, p => p.rs.filter(r => r.pais === v).length) }
+];
+const FILTRO = Object.fromEntries(FILTROS.map(f => [f.k, f]));
+const PERIODOS = [["hoje", "Hoje"], ["7", "7 dias"], ["30", "30 dias"], ["90", "90 dias"], ["365", "12 meses"], ["tudo", "Tudo"]];
+
+function estadoInicial() {
+  const e = { periodo: "tudo", de: "", ate: "", sel: new Set() };
+  for (const f of FILTROS) e[f.k] = new Set(f.opcoes);
+  return e;
+}
+let estado = estadoInicial();
+const ui = { pagina: "mapa", aba: "confusoes", aberta: null, camada: "rounds", linhas: "sim", ordemPaises: "perdidos",
+  ordemRounds: { col: 0, dir: -1 } };
+const ativo = k => estado[k].size < FILTRO[k].opcoes.length;
+
+const CHAVE = "geoguessr-track-v2";
+function salvar() {
+  try {
+    const s = { periodo: estado.periodo, de: estado.de, ate: estado.ate,
+      camada: ui.camada, linhas: ui.linhas, ordemPaises: ui.ordemPaises };
+    for (const f of FILTROS) s["fora_" + f.k] = f.opcoes.filter(v => !estado[f.k].has(v));
+    localStorage.setItem(CHAVE, JSON.stringify(s));
+  } catch (e) { }
+}
+function carregar() {
+  try {
+    const s = JSON.parse(localStorage.getItem(CHAVE)); if (!s) return;
+    const e = estadoInicial();
+    e.periodo = s.periodo || "tudo"; e.de = s.de || ""; e.ate = s.ate || "";
+    // Opção nova (mapa, país) entra ligada, porque só o que foi desligado fica guardado.
+    for (const f of FILTROS) { const fora = new Set(s["fora_" + f.k] || []); e[f.k] = new Set(f.opcoes.filter(v => !fora.has(v)));
+      if (!e[f.k].size && f.minimo) e[f.k] = new Set(f.opcoes); }
+    estado = e;
+    ui.camada = s.camada || ui.camada; ui.linhas = s.linhas || ui.linhas; ui.ordemPaises = s.ordemPaises || ui.ordemPaises;
+  } catch (e) { }
+}
+carregar();
+
+// Mapa temático de país: 80% ou mais dos rounds dele num país só (Mongolia, A Balanced Brazil).
+// Mapas regionais (Europa, Sudeste Asiático) não entram, porque espalham entre vários países.
+const mapaDePais = new Set(d3.rollups(rounds, v => d3.max(d3.rollup(v, x => x.length, r => r.pais).values()) / v.length, r => r.mapa)
+  .filter(([, f]) => f >= 0.8).map(([m]) => m));
+// O mapa abre nas 5 partidas mais recentes fora desses mapas, para não começar com 1.700 pontos.
+const ultimas5 = ps => ps.filter(p => !mapaDePais.has(p.mapa)).slice(0, 5).map(p => p.id);
+const ehPadrao = () => { const u = ultimas5(partidasFiltradas()); return u.length > 0 && u.length === estado.sel.size && u.every(id => estado.sel.has(id)); };
+
+function limitesPeriodo() {
+  if (estado.periodo === "custom") return [estado.de || null, estado.ate || null];
+  if (estado.periodo === "tudo") return [null, null];
+  const hoje = new Date();
+  if (estado.periodo === "hoje") return [hoje.toLocaleDateString("sv-SE"), null];
+  const d = new Date(); d.setDate(d.getDate() - (+estado.periodo - 1));
+  return [d.toLocaleDateString("sv-SE"), null];
+}
+// Uma partida passa ou sai inteira. O filtro de país também tira os rounds de outros países.
+function passaFiltros(p, ignorar) {
+  const [de, ate] = limitesPeriodo();
+  if (de && p.data < de) return false;
+  if (ate && p.data > ate) return false;
+  if (ignorar !== "jogo" && !estado.jogo.has(p.jogo)) return false;
+  if (ignorar !== "modo" && !estado.modo.has(p.modo)) return false;
+  if (ignorar !== "mapas" && !estado.mapas.has(p.mapa)) return false;
+  if (ignorar !== "pais" && ativo("pais") && ![...p.paises].some(x => estado.pais.has(x))) return false;
+  if (p.grupo === "Duelo") {
+    if (ignorar !== "tipo" && !estado.tipo.has(p.tipo)) return false;
+    const res = resultadoDe(p) === "Vitória" ? "Vitória" : "Derrota";
+    if (ignorar !== "resultado" && !estado.resultado.has(res)) return false;
+  }
+  return true;
+}
+const partidasFiltradas = () => partidasTodas.filter(p => passaFiltros(p));
+const roundsDe = ps => ps.flatMap(p => ativo("pais") ? p.rs.filter(r => estado.pais.has(r.pais)) : p.rs)
+  .sort((a, b) => (a.data + a.hora + a.id).localeCompare(b.data + b.hora + b.id) || a.round - b.round);
+function roundsVisiveis(ps) { return roundsDe(estado.sel.size ? ps.filter(p => estado.sel.has(p.id)) : ps); }
+
+function resumoFiltro(f) {
+  const s = estado[f.k], n = s.size, t = f.opcoes.length;
+  if (n === t) return "todos";
+  if (n === 0) return "nenhum";
+  if (n === 1) return [...s][0];
+  if (n <= 2 && t > 3) return [...s].join(", ");
+  return `${n} de ${t}`;
+}
+function filtrar(k, valores) { estado[k] = new Set(valores); atualizar(); }
+
+// ---------------------------------------------------------------------------
+// Barra de filtros e popover
+// ---------------------------------------------------------------------------
+const SETA = `<svg class="seta" viewBox="0 0 16 16"><path d="M4 6l4 4 4-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+function desenharFiltros(ps) {
+  const el = document.getElementById("filtros"); el.replaceChildren();
+  const seg = document.createElement("div"); seg.className = "segmento";
+  for (const [v, t] of PERIODOS) { const b = document.createElement("button"); b.textContent = t;
+    b.setAttribute("aria-pressed", String(estado.periodo === v));
+    b.onclick = () => { estado.periodo = v; estado.de = ""; estado.ate = ""; atualizar(); }; seg.appendChild(b); }
+  const bd = document.createElement("button"); bd.setAttribute("aria-pressed", String(estado.periodo === "custom"));
+  bd.innerHTML = estado.periodo === "custom" ? `${estado.de ? dataCurta(estado.de) : "início"} a ${estado.ate ? dataCurta(estado.ate) : "hoje"}` : "Datas…";
+  bd.onclick = () => abrirPop(bd, popDatas); seg.appendChild(bd);
+  el.appendChild(seg);
+
+  for (const f of FILTROS) {
+    if (f.k === "tipo" && !estado.jogo.has("Duelo 1v1") && !estado.jogo.has("Duelo 2v2")) continue;
+    if (f.k === "resultado" && !estado.jogo.has("Duelo 1v1") && !estado.jogo.has("Duelo 2v2")) continue;
+    const b = document.createElement("button"); b.className = "pilula" + (ativo(f.k) ? " ativa" : "");
+    b.innerHTML = `${f.nome} <span class="val">${esc(resumoFiltro(f))}</span>` + (ativo(f.k) ? `<span class="x" title="Tirar este filtro">×</span>` : SETA);
+    b.onclick = ev => {
+      if (ev.target.closest(".x")) { estado[f.k] = new Set(f.opcoes); fecharPop(); atualizar(); return; }
+      abrirPop(b, () => popOpcoes(f));
+    };
+    el.appendChild(b);
+  }
+  const algum = estado.periodo !== "tudo" || FILTROS.some(f => ativo(f.k));
+  if (algum) { const l = document.createElement("button"); l.className = "btn link"; l.textContent = "Limpar filtros";
+    l.onclick = () => { const sel = estado.sel; estado = estadoInicial(); estado.sel = sel; atualizar(); }; el.appendChild(l); }
+  if (estado.sel.size) {
+    const visiveis = ps.filter(p => estado.sel.has(p.id)).length;
+    const s = document.createElement("span"); s.className = "chip-sel";
+    s.textContent = ehPadrao() ? `Últimas ${visiveis} partidas em mapas mundiais` :
+      `${visiveis} partida${visiveis !== 1 ? "s" : ""} selecionada${visiveis !== 1 ? "s" : ""}` +
+      (visiveis < estado.sel.size ? ` (${estado.sel.size - visiveis} fora do filtro)` : "");
+    const x = document.createElement("button"); x.textContent = "×"; x.title = "Ver todas as partidas";
+    x.onclick = () => { estado.sel.clear(); atualizar(); };
+    s.appendChild(x); el.appendChild(s);
+  }
+  if (!estado.sel.size || !ehPadrao()) { const u = document.createElement("button"); u.className = "btn link";
+    u.textContent = "Ver últimas 5"; u.title = "As 5 partidas mais recentes em mapas que não são de um país só";
+    u.onclick = () => { estado.sel = new Set(ultimas5(partidasFiltradas())); atualizar(); }; el.appendChild(u); }
+  if (!algum && !estado.sel.size) { const d = document.createElement("span"); d.className = "dica";
+    d.textContent = "Clique num filtro para escolher. O × tira o filtro."; el.appendChild(d); }
+}
+
+const pop = document.getElementById("pop");
+let popAncora = null, popRender = null, popBusca = "";
+function abrirPop(ancora, render) {
+  if (pop.classList.contains("aberto") && popAncora && popAncora.textContent === ancora.textContent) { fecharPop(); return; }
+  popAncora = ancora; popRender = render; popBusca = "";
+  pop.classList.add("aberto"); render(); posicionarPop();
+  const i = pop.querySelector("input[type=search]"); if (i) i.focus();
+}
+function posicionarPop() {
+  if (!popAncora || !popAncora.isConnected) return;
+  const r = popAncora.getBoundingClientRect();
+  const x = Math.max(12, Math.min(r.left, window.innerWidth - pop.offsetWidth - 12));
+  pop.style.left = x + "px"; pop.style.top = (r.bottom + 8) + "px";
+}
+function fecharPop() { pop.classList.remove("aberto"); popAncora = null; popRender = null; }
+document.addEventListener("pointerdown", ev => {
+  if (pop.classList.contains("aberto") && !pop.contains(ev.target) && !(popAncora && popAncora.contains(ev.target))) fecharPop();
+});
+document.addEventListener("keydown", ev => { if (ev.key === "Escape") fecharPop(); });
+window.addEventListener("resize", posicionarPop);
+
+function popOpcoes(f) {
+  const base = partidasTodas.filter(p => passaFiltros(p, f.k));
+  pop.innerHTML = `<div class="cab"><b>${f.nome}</b><button class="btn link" data-a="todos">Todos</button>` +
+    (f.minimo ? "" : `<button class="btn link" data-a="nenhum">Nenhum</button>`) + `</div>` +
+    (f.busca ? `<input type="search" placeholder="Buscar ${f.nome.toLowerCase()}" value="${esc(popBusca)}">` : "") +
+    `<div class="opcoes" role="listbox"></div>` +
+    `<div class="rodape"><span class="dica">Clique liga e desliga. “só” deixa uma opção.</span></div>`;
+  const lista = pop.querySelector(".opcoes");
+  const q = popBusca.trim().toLowerCase();
+  for (const v of f.opcoes) {
+    if (q && !v.toLowerCase().includes(q)) continue;
+    const n = f.conta(base, v);
+    const op = document.createElement("div"); op.className = "op" + (n ? "" : " zero"); op.setAttribute("role", "option");
+    op.setAttribute("aria-checked", String(estado[f.k].has(v)));
+    op.innerHTML = `<span class="caixa"></span><span class="nome">${esc(v)}</span><span class="so">só</span><span class="n">${f0(n)}</span>`;
+    op.onclick = ev => {
+      if (ev.target.closest(".so")) estado[f.k] = new Set([v]);
+      else { const s = estado[f.k]; if (s.has(v)) s.delete(v); else s.add(v); if (!s.size && f.minimo) f.opcoes.forEach(x => s.add(x)); }
+      atualizar();
+    };
+    lista.appendChild(op);
+  }
+  if (!lista.children.length) lista.innerHTML = '<div class="vazio">Nada com esse nome.</div>';
+  pop.querySelector("[data-a=todos]").onclick = () => { estado[f.k] = new Set(f.opcoes); atualizar(); };
+  const nen = pop.querySelector("[data-a=nenhum]"); if (nen) nen.onclick = () => { estado[f.k] = new Set(); atualizar(); };
+  const inp = pop.querySelector("input[type=search]");
+  if (inp) { inp.oninput = () => { popBusca = inp.value; const pos = inp.selectionStart; popOpcoes(f); const i2 = pop.querySelector("input[type=search]"); i2.focus(); i2.setSelectionRange(pos, pos); }; }
+}
+function popDatas() {
+  const [de, ate] = limitesPeriodo();
+  pop.innerHTML = `<div class="cab"><b>Intervalo de datas</b></div><div class="datas">
+    <label>De<input type="date" id="pop-de" value="${de || ""}" min="${datas[0]}" max="${datas.at(-1)}"></label>
+    <label>Até<input type="date" id="pop-ate" value="${ate || ""}" min="${datas[0]}" max="${datas.at(-1)}"></label></div>
+    <div class="rodape"><button class="btn link" id="pop-sem">Sem intervalo</button></div>`;
+  for (const id of ["de", "ate"]) pop.querySelector("#pop-" + id).onchange = e => {
+    estado.de = pop.querySelector("#pop-de").value; estado.ate = pop.querySelector("#pop-ate").value;
+    estado.periodo = (estado.de || estado.ate) ? "custom" : "tudo"; atualizar(); };
+  pop.querySelector("#pop-sem").onclick = () => { estado.periodo = "tudo"; estado.de = estado.ate = ""; fecharPop(); atualizar(); };
+}
+
+// ===========================================================================
+// Tooltip
+// ===========================================================================
+const tip = document.getElementById("tip");
+function mostrar(ev, linhas) {
+  tip.replaceChildren();
+  linhas.forEach(([txt, cls], i) => { const el = document.createElement(i === 0 ? "b" : "div");
+    el.textContent = txt; if (cls) el.className = cls; tip.appendChild(el); if (i === 0) tip.appendChild(document.createElement("div")); });
+  tip.style.opacity = 1;
+  const x = Math.min(ev.clientX + 14, window.innerWidth - tip.offsetWidth - 8);
+  const y = Math.min(ev.clientY + 14, window.innerHeight - tip.offsetHeight - 8);
+  tip.style.left = x + "px"; tip.style.top = y + "px";
+}
+function esconder() { tip.style.opacity = 0; }
+const linhasRound = r => [
+  [`${r.pais}${r.regiao ? " (" + r.regiao + ")" : ""}`],
+  [`${r.acertou ? "✓" : "✗"} palpite: ${r.ppais || NA}${r.pregiao ? " (" + r.pregiao + ")" : ""}`, r.acertou ? "ok" : "no"],
+  [`${r.km != null ? f0(r.km) + " km · " : ""}${f0(r.pontos)} pontos`],
+  [`${r.nome} · round ${r.round}`, "m"], [`${r.modo} · ${r.mapa}`, "m"]];
+
+// ===========================================================================
+// Mapa. Reaproveitado na página da partida.
+// ===========================================================================
+let mundo = null;
+async function carregarMundo() {
+  try {
+    const topo = await d3.json("https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json");
+    mundo = topojson.feature(topo, topo.objects.countries);
+    ligarRoundsAosPaises();
+  } catch (e) { mundo = { type: "FeatureCollection", features: [] }; }
+}
+// Descobre o polígono de cada local, para a camada de acerto por país.
+function ligarRoundsAosPaises() {
+  const fs = mundo.features, caixas = fs.map(f => d3.geoBounds(f));
+  const dentro = (b, lng, lat) => lat >= b[0][1] && lat <= b[1][1] &&
+    (b[0][0] <= b[1][0] ? lng >= b[0][0] && lng <= b[1][0] : lng >= b[0][0] || lng <= b[1][0]);
+  const porNome = new Map();
+  for (const r of rounds) {
+    r.feat = null;
+    for (let i = 0; i < fs.length; i++) if (dentro(caixas[i], r.lng, r.lat) && d3.geoContains(fs[i], [r.lng, r.lat])) { r.feat = i; break; }
+    if (r.feat != null) { const m = porNome.get(r.pais) || new Map(); m.set(r.feat, (m.get(r.feat) || 0) + 1); porNome.set(r.pais, m); }
+  }
+  // Cada país fica com o polígono onde cai a maioria dos seus rounds. Ponto no litoral ou na fronteira
+  // que a malha simplificada põe fora (ou no vizinho, como Canadá nos Estados Unidos) segue o país.
+  const melhor = new Map([...porNome].map(([p, m]) => [p, [...m].sort((a, b) => b[1] - a[1])[0][0]]));
+  for (const r of rounds) r.feat = melhor.has(r.pais) ? melhor.get(r.pais) : null;
+  nomeFeat = new Map();
+  for (const [p, i] of melhor) if (!nomeFeat.has(i)) nomeFeat.set(i, p);
+}
+let nomeFeat = new Map();
+const RAMPA = ["#cde2fb", "#9ec5f4", "#6da7ec", "#3987e5", "#256abf", "#184f95"];
+const corAcerto = p => RAMPA[Math.min(RAMPA.length - 1, Math.floor(p * RAMPA.length))];
+const W = 1000, H = 520;
+
+function zoomBtns(el) {
+  if (el.querySelector(".zoom-btns")) return;
+  const z = document.createElement("div"); z.className = "zoom-btns";
+  z.innerHTML = `<button aria-label="Aproximar">+</button><button aria-label="Afastar">−</button><button aria-label="Enquadrar de novo" title="Enquadrar de novo">⟲</button>`;
+  const [mais, menos, reset] = z.querySelectorAll("button");
+  mais.onclick = () => el._svg && el._svg.transition().duration(250).call(el._zoom.scaleBy, 1.6);
+  menos.onclick = () => el._svg && el._svg.transition().duration(250).call(el._zoom.scaleBy, 1 / 1.6);
+  reset.onclick = () => el._svg && el._svg.transition().duration(250).call(el._zoom.transform, d3.zoomIdentity);
+  el.appendChild(z);
+  const rosa = document.createElement("span"); rosa.className = "rosa"; rosa.innerHTML = doodle("rosa"); el.appendChild(rosa);
+}
+
+function desenharMapa(el, rs, o) {
+  zoomBtns(el);
+  el.querySelectorAll("svg.mundo").forEach(s => s.remove());
+  const focado = o.focado && rs.length > 0, enquadrar = (o.focado || o.enquadrar) && rs.length > 0;
+  const proj = d3.geoNaturalEarth1().fitExtent([[4, 4], [W - 4, H - 4]], { type: "Sphere" });
+  if (enquadrar) {
+    // Enquadra locais e palpites, sem passar de 12 vezes o mundo.
+    // Com filtro de país, só os locais contam; palpite do outro lado do mundo não abre a moldura.
+    const pts = rs.flatMap(r => [[r.lng, r.lat], ...(focado && r.plat != null ? [[r.plng, r.plat]] : [])]);
+    const s0 = proj.scale();
+    proj.fitExtent([[50, 50], [W - 50, H - 50]], { type: "MultiPoint", coordinates: pts });
+    if (proj.scale() > s0 * 12) { const c = proj.invert([W / 2, H / 2]); proj.scale(s0 * 12).center([0, 0]).translate([W / 2, H / 2]);
+      const [x, y] = proj(c); const t = proj.translate(); proj.translate([t[0] + W / 2 - x, t[1] + H / 2 - y]); }
+    if (proj.scale() < s0) proj.fitExtent([[4, 4], [W - 4, H - 4]], { type: "Sphere" });
+  }
+  const path = d3.geoPath(proj);
+  const svg = d3.select(el).insert("svg", ".zoom-btns").attr("class", "mundo").attr("viewBox", `0 0 ${W} ${H}`);
+  if (!el._zoom) el._zoom = d3.zoom().scaleExtent([1, 40]).translateExtent([[-W, -H], [2 * W, 2 * H]]);
+  el._svg = svg;
+  svg.append("rect").attr("width", W).attr("height", H).attr("fill", "var(--sea)");
+  const g = svg.append("g");
+  g.append("path").attr("d", path(d3.geoGraticule10())).attr("fill", "none").attr("stroke", "var(--grat)")
+    .attr("stroke-width", 0.7).attr("vector-effect", "non-scaling-stroke");
+  const paises = o.camada === "paises";
+  const stats = new Map();
+  if (paises) for (const r of rs) if (r.feat != null) { const s = stats.get(r.feat) || { n: 0, ok: 0, perdidos: 0 };
+    s.n++; s.ok += r.acertou; s.perdidos += 5000 - r.pontos; stats.set(r.feat, s); }
+  const terra = g.append("g").selectAll("path").data(mundo ? mundo.features : []).join("path")
+    .attr("d", path).attr("fill", (f, i) => paises && stats.has(i) ? corAcerto(stats.get(i).ok / stats.get(i).n) : "var(--land)")
+    .attr("stroke", paises ? "#fff" : "var(--land-borda)").attr("stroke-width", paises ? 1 : 0.7)
+    .attr("vector-effect", "non-scaling-stroke");
+  if (paises) {
+    terra.style("cursor", (f, i) => stats.has(i) ? "pointer" : "default")
+      .on("pointermove", (ev, f) => { const i = mundo.features.indexOf(f), s = stats.get(i); if (!s) { esconder(); return; }
+        mostrar(ev, [[nomeFeat.get(i) || f.properties.name], [`${fpct(s.ok / s.n)} de acerto de país`],
+          [`${s.ok} de ${s.n} rounds · ${f0(s.perdidos)} pontos perdidos`, "m"], ["Clique para filtrar este país", "m"]]); })
+      .on("pointerleave", esconder)
+      .on("click", (ev, f) => { const i = mundo.features.indexOf(f); if (!stats.has(i)) return;
+        const nomes = [...new Set(rs.filter(r => r.feat === i).map(r => r.pais))]; esconder(); filtrar("pais", nomes); });
+  }
+  let gl = null, gp = null;
+  if (!paises) {
+    const comPalpite = rs.filter(r => r.plat != null);
+    if (o.linhas || focado) g.append("g").selectAll("path").data(comPalpite).join("path")
+      .attr("d", r => path({ type: "LineString", coordinates: [[r.lng, r.lat], [r.plng, r.plat]] }))
+      .attr("fill", "none").attr("stroke", r => r.acertou ? "var(--ok)" : "var(--erro)")
+      // Com centenas de rounds a linha cheia vira borrão; fica mais leve quanto mais rounds.
+      .attr("stroke-width", focado ? 1.8 : 1).attr("stroke-linecap", "round")
+      .attr("stroke-opacity", focado ? 0.85 : Math.max(0.08, Math.min(0.45, 25 / Math.sqrt(comPalpite.length + 1) / 4)))
+      .attr("vector-effect", "non-scaling-stroke");
+    gp = g.append("g").selectAll("g").data(focado ? comPalpite : []).join("g");
+    gp.append("circle").attr("r", 4).attr("fill", "#fff").attr("stroke", "var(--ink-2)").attr("stroke-width", 1.8);
+    gl = g.append("g").selectAll("g").data(rs).join("g").style("cursor", "pointer");
+    gl.append("circle").attr("r", 12).attr("fill", "transparent");
+    const tam = focado ? 1 : 0.82;
+    // Acerto é círculo azul; erro é losango laranja. A forma separa mesmo sem cor.
+    gl.append("path").attr("d", r => d3.symbol(r.acertou ? d3.symbolCircle : d3.symbolDiamond, (r.acertou ? 95 : 105) * tam * tam)())
+      .attr("fill", r => r.acertou ? "var(--ok)" : "var(--erro)").attr("stroke", "#fff").attr("stroke-width", 2);
+    if (o.numerar) gl.append("text").attr("x", 9).attr("y", -7).text(r => r.round)
+      .style("fill", "var(--ink)").style("font-size", "12.5px").style("font-weight", 800)
+      .style("paint-order", "stroke").style("stroke", "#fff").style("stroke-width", 3.5);
+    gl.on("pointermove", (ev, r) => mostrar(ev, [...linhasRound(r), ...(o.dicaClique ? [[o.dicaClique(r), "m"]] : [])]))
+      .on("pointerleave", esconder)
+      .on("click", (ev, r) => { esconder(); o.aoClicar && o.aoClicar(r); });
+  }
+  // Zoom: os pontos mantêm o tamanho na tela
+  const posicionar = k => {
+    if (gl) gl.attr("transform", r => { const [x, y] = proj([r.lng, r.lat]); return `translate(${x},${y}) scale(${1 / k})`; });
+    if (gp) gp.attr("transform", r => { const [x, y] = proj([r.plng, r.plat]); return `translate(${x},${y}) scale(${1 / k})`; });
+  };
+  posicionar(1);
+  el._zoom.on("zoom", ev => { g.attr("transform", ev.transform); posicionar(ev.transform.k); esconder(); });
+  svg.call(el._zoom).on("dblclick.zoom", null);
+  svg.call(el._zoom.transform, d3.zoomIdentity);
+}
+
+// ===========================================================================
+// Página MAPA
+// ===========================================================================
+function tiles(rs) {
+  const el = document.getElementById("tiles"); el.replaceChildren();
+  const duelos = d3.groups(rs.filter(r => r.grupo === "Duelo"), r => r.id);
+  const v = duelos.filter(([, x]) => x[0].ganhouJogo === "Sim").length;
+  const ranq = rs.filter(r => r.grupo === "Duelo" && r.tipo === "Ranqueado" && r.formato === "1v1" && r.rating != null);
+  const ult = ranq.at(-1);
+  const kms = rs.map(r => r.km).filter(x => x != null);
+  const itens = [
+    { d: "bandeira", label: "Acerto de país", valor: rs.length ? fpct(d3.mean(rs, r => r.acertou)) : NA,
+      nota: `${f0(d3.sum(rs, r => r.acertou))} de ${f0(rs.length)} rounds` },
+    { d: "trofeu", label: "Pontos por round", valor: rs.length ? f0(d3.mean(rs, r => r.pontos)) : NA, nota: "média, de 5.000" },
+    { d: "regua", label: "Distância mediana", valor: kms.length ? f0(d3.median(kms)) + " km" : NA, nota: "do palpite ao local" },
+    { d: "setas", label: "Duelos", valor: duelos.length ? `${v}V ${duelos.length - v}D` : NA,
+      nota: duelos.length ? `${fpct(v / duelos.length)} de vitórias` : "nenhum no filtro" },
+    { d: "montanha", label: "Rating 1v1", valor: ult ? f0(ult.rating) : NA,
+      nota: ult ? `no último ranqueado` : "sem ranqueado 1v1" }
+  ];
+  for (const t of itens) {
+    const d = document.createElement("div"); d.className = "tile";
+    d.innerHTML = `<div class="label">${t.label}</div><div class="valor tnum">${t.valor}</div><div class="nota">${t.nota}</div>${doodle(t.d)}`;
+    el.appendChild(d);
+  }
+}
+
+function legendaMapa() {
+  const el = document.getElementById("legenda-mapa");
+  if (ui.camada === "paises") el.innerHTML = `<span>acerto de país <span class="rampa">${RAMPA.map(c => `<b style="background:${c}"></b>`).join("")}</span> 0% a 100%</span><span class="dica">clique num país para filtrar</span>`;
+  else el.innerHTML = `<span><i class="dot" style="background:var(--ok)"></i>✓ acertei o país</span>
+    <span><i class="losango" style="background:var(--erro)"></i>✗ errei</span>` +
+    (estado.sel.size ? `<span><i class="dot" style="background:#fff;border:1.8px solid var(--ink-2)"></i>meu palpite</span>` : "");
+}
+
+function itemPartida(p, sel, onClick) {
+  const d = document.createElement("div"); d.className = "partida"; d.setAttribute("role", "option");
+  d.setAttribute("aria-selected", String(sel)); d.dataset.id = p.id;
+  const res = resultadoDe(p);
+  const selo = res ? `<span class="selo ${res === "Vitória" ? "v" : "d"}">${res === "Vitória" ? "✓ Vitória" : "✗ " + res}</span>`
+    : `<span class="selo p tnum">${f0(p.total ?? p.pontos)} pts</span>`;
+  const extra = p.grupo === "Duelo" && p.tipo !== "Ranqueado" ? ` · ${p.tipo.toLowerCase()}` : "";
+  d.innerHTML = `<div class="t1">${esc(p.nome)}</div>${selo}<div class="t2">${p.hora} · ${esc(p.mapa)} · ${p.modo}${extra}</div>
+    <div class="bolinhas" title="${p.acertos} de ${p.n} países certos">${p.rs.map(r => `<i class="${r.acertou ? "" : "e"}"></i>`).join("")}</div>`;
+  d.onclick = onClick;
+  return d;
+}
+function listaPorDia(el, ps, sel, onClick) {
+  el.replaceChildren();
+  if (!ps.length) { el.innerHTML = vazioHTML("Nenhuma partida aqui."); return; }
+  let dia = null;
+  ps.forEach((p, i) => {
+    if (p.data !== dia) { dia = p.data;
+      const doDia = ps.filter(x => x.data === dia), dv = doDia.filter(x => resultadoDe(x) === "Vitória").length, dd = doDia.filter(x => x.grupo === "Duelo").length;
+      const h = document.createElement("div"); h.className = "dia";
+      const wd = new Date(dia + "T12:00:00").toLocaleDateString("pt-BR", { weekday: "short" }).replace(".", "");
+      h.innerHTML = `<span>${wd} ${dataBR(dia)}</span><span>${doDia.length} partida${doDia.length > 1 ? "s" : ""}${dd ? ` · ${dv}V ${dd - dv}D` : ""}</span>`;
+      el.appendChild(h); }
+    el.appendChild(itemPartida(p, sel(p), ev => onClick(ev, p, i)));
+  });
+}
+const filtraBusca = (ps, q) => { q = q.trim().toLowerCase(); return q ? ps.filter(p => q.split(/\s+/).every(t => p.busca.includes(t))) : ps; };
+
+let ultimoClique = null, partidasNaLista = [];
+const buscaPartidas = document.getElementById("partidas-busca");
+buscaPartidas.oninput = () => atualizar();
+document.getElementById("sel-limpar").onclick = () => { estado.sel.clear(); atualizar(); };
+document.getElementById("sel-visiveis").onclick = () => { partidasNaLista.forEach(p => estado.sel.add(p.id)); atualizar(); };
+for (const id of ["camada", "linhas"]) document.querySelectorAll(`#${id} button`).forEach(b =>
+  b.onclick = () => { ui[id] = b.dataset.v; atualizar(); });
+
+function paginaMapa(ps, rs) {
+  tiles(rs); legendaMapa();
+  document.querySelectorAll("#camada button").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.v === ui.camada)));
+  document.querySelectorAll("#linhas button").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.v === ui.linhas)));
+  document.getElementById("linhas").hidden = ui.camada === "paises";
+  const focado = estado.sel.size > 0;
+  desenharMapa(document.getElementById("mapa"), rs, { focado, enquadrar: ativo("pais") && estado.pais.size <= 5, numerar: focado && d3.groups(rs, r => r.id).length <= 5,
+    camada: ui.camada, linhas: ui.linhas === "sim",
+    dicaClique: r => estado.sel.has(r.id) ? "Clique para tirar esta partida da seleção" : "Clique para ver só esta partida",
+    aoClicar: r => { if (estado.sel.has(r.id)) estado.sel.delete(r.id); else estado.sel.add(r.id); atualizar(); } });
+  document.getElementById("mapa-sub").textContent = ui.camada === "paises"
+    ? "Cor do país pelo acerto de país nos rounds que caíram nele."
+    : focado && ehPadrao() ? `As ${estado.sel.size} partidas mais recentes em mapas mundiais. O número é o round; o anel branco é o seu palpite. O × no topo mostra todas.`
+    : focado ? `${f0(rs.length)} rounds das partidas selecionadas. O número é o round; o anel branco é o seu palpite.`
+    : "Cada ponto é o local real; a linha vai até o seu palpite. Clique num ponto para ver só aquela partida.";
+  // Lista
+  partidasNaLista = filtraBusca(ps, buscaPartidas.value);
+  document.getElementById("partidas-sub").textContent = `${f0(ps.length)} no filtro` + (estado.sel.size ? ` · ${estado.sel.size} selecionada${estado.sel.size > 1 ? "s" : ""}` : "");
+  listaPorDia(document.getElementById("lista-partidas"), partidasNaLista, p => estado.sel.has(p.id), (ev, p, i) => {
+    if (ev.shiftKey && ultimoClique != null) {
+      const a = partidasNaLista.findIndex(x => x.id === ultimoClique);
+      if (a >= 0) { const [i0, i1] = [Math.min(a, i), Math.max(a, i)]; for (let k = i0; k <= i1; k++) estado.sel.add(partidasNaLista[k].id); }
+    } else if (estado.sel.has(p.id)) estado.sel.delete(p.id); else estado.sel.add(p.id);
+    ultimoClique = p.id; atualizar();
+  });
+  descobertas(rs);
+}
+
+// Descobertas: frases tiradas do filtro atual, sem nada inventado.
+function descobertas(rs) {
+  const el = document.getElementById("descobertas"); el.replaceChildren();
+  const cards = [];
+  const erros = rs.filter(r => !r.acertou && r.ppais);
+  const conf = d3.rollups(erros, v => v.length, r => r.pais, r => r.ppais).flatMap(([a, xs]) => xs.map(([b, n]) => ({ a, b, n }))).sort((x, y) => y.n - x.n);
+  if (conf.length && conf[0].n >= 2) cards.push({ d: "setas", k: "Confusão campeã",
+    t: `Você chutou <b>${esc(conf[0].b)}</b> quando era <b>${esc(conf[0].a)}</b> ${conf[0].n} vezes.`,
+    acao: ["Ver no mapa", () => { ui.camada = "rounds"; filtrar("pais", [conf[0].a]); }] });
+  const porPais = d3.rollups(rs, v => ({ n: v.length, ok: d3.sum(v, r => r.acertou), perdidos: d3.sum(v, r => 5000 - r.pontos) }), r => r.pais)
+    .map(([pais, o]) => ({ pais, ...o, p: o.ok / o.n }));
+  const caro = porPais.slice().sort((a, b) => b.perdidos - a.perdidos)[0];
+  if (caro) cards.push({ d: "binoculo", k: "Onde mais perde pontos",
+    t: `<b>${esc(caro.pais)}</b> custou ${f0(caro.perdidos)} pontos em ${caro.n} rounds, com ${fpct(caro.p)} de acerto.`,
+    acao: ["Ver erros por país", () => { ui.aba = "paises"; ui.ordemPaises = "perdidos"; location.hash = "#erros/paises"; }] });
+  const forte = porPais.filter(d => d.n >= 5 && d.p >= 0.5).sort((a, b) => b.p - a.p || b.n - a.n)[0];
+  if (forte) cards.push({ d: "trofeu", k: "Seu ponto forte",
+    t: `<b>${esc(forte.pais)}</b>: acertou o país em ${forte.ok} de ${forte.n} rounds (${fpct(forte.p)}).`, acao: null });
+  const reg = rs.filter(r => regiaoCerta(r) != null);
+  if (reg.length >= 10) cards.push({ d: "bussola", k: "Região",
+    t: `Quando acerta o país, cai no setor certo em <b>${fpct(d3.mean(reg, regiaoCerta))}</b> dos rounds (${f0(reg.length)} rounds).`,
+    acao: ["Ver regiões", () => { location.hash = "#erros/regioes"; }] });
+  const modos = d3.rollups(rs, v => ({ n: v.length, p: d3.mean(v, r => r.acertou) }), r => r.modo).filter(([, o]) => o.n >= 20).sort((a, b) => b[1].p - a[1].p);
+  if (modos.length >= 2) cards.push({ d: "camera", k: "Modo",
+    t: `Acerta mais em <b>${modos[0][0]}</b> (${fpct(modos[0][1].p)}) que em <b>${modos.at(-1)[0]}</b> (${fpct(modos.at(-1)[1].p)}).`, acao: null });
+  for (const c of cards.slice(0, 4)) {
+    const d = document.createElement("div"); d.className = "card descoberta";
+    d.innerHTML = `${doodle(c.d)}<div><div class="k">${c.k}</div><div class="t">${c.t}</div></div>`;
+    if (c.acao) { const b = document.createElement("button"); b.className = "btn"; b.textContent = c.acao[0]; b.onclick = c.acao[1];
+      d.lastElementChild.appendChild(b); }
+    el.appendChild(d);
+  }
+}
+
+// ===========================================================================
+// Página PARTIDAS
+// ===========================================================================
+const buscaPartidas2 = document.getElementById("partidas2-busca");
+buscaPartidas2.oninput = () => atualizar();
+let lista2 = [];
+function paginaPartidas(ps) {
+  lista2 = filtraBusca(ps, buscaPartidas2.value);
+  document.getElementById("partidas2-sub").textContent = `${f0(lista2.length)} partida${lista2.length !== 1 ? "s" : ""}`;
+  if (!ui.aberta || !partidaPorId.has(ui.aberta)) ui.aberta = lista2[0]?.id || null;
+  const el = document.getElementById("lista-partidas2");
+  listaPorDia(el, lista2, p => p.id === ui.aberta, (ev, p) => abrirPartida(p.id));
+  const atual = el.querySelector(`[data-id="${ui.aberta}"]`);
+  if (atual) atual.scrollIntoView({ block: "nearest" });
+  detalhe(ui.aberta ? partidaPorId.get(ui.aberta) : null);
+}
+function abrirPartida(id) { ui.aberta = id; history.replaceState(null, "", "#partidas/" + id); atualizar(); }
+document.addEventListener("keydown", ev => {
+  if (ui.pagina !== "partidas" || ev.target.matches("input") || !["ArrowDown", "ArrowUp"].includes(ev.key)) return;
+  const i = lista2.findIndex(p => p.id === ui.aberta), j = i + (ev.key === "ArrowDown" ? 1 : -1);
+  if (j >= 0 && j < lista2.length) { ev.preventDefault(); abrirPartida(lista2[j].id); }
+});
+function detalhe(p) {
+  const el = document.getElementById("detalhe");
+  if (!p) { el.innerHTML = vazioHTML("Escolha uma partida na lista.", "mala"); return; }
+  const res = resultadoDe(p);
+  const i = lista2.findIndex(x => x.id === p.id);
+  const kms = p.rs.map(r => r.km).filter(x => x != null);
+  const et = [p.jogo, p.modo, p.mapa, p.grupo === "Duelo" ? p.tipo : p.origem, `${dataBR(p.data)} ${p.hora}`,
+    p.rating != null ? `rating ${f0(p.rating)}` : null, p.ratingOp != null ? `oponente ${f0(p.ratingOp)}` : null, p.divisao].filter(Boolean);
+  el.innerHTML = `<div class="titulo"><h2>${esc(p.nome)}</h2>` +
+    (res ? `<span class="selo ${res === "Vitória" ? "v" : "d"}">${res === "Vitória" ? "✓ Vitória" : "✗ " + res}</span>` : "") +
+    `<div class="navega"><button class="btn" id="ant" ${i <= 0 ? "disabled" : ""}>↑ Mais nova</button><button class="btn" id="prox" ${i < 0 || i >= lista2.length - 1 ? "disabled" : ""}>↓ Mais antiga</button></div></div>
+    <div class="etiquetas">${et.map(t => `<span class="etiqueta">${esc(t)}</span>`).join("")}</div>
+    <div class="mapa" id="mapa-partida"></div>
+    <div class="resumo-partida">
+      <div><div class="r">Países certos</div><div class="v tnum">${p.acertos} de ${p.n}</div></div>
+      <div><div class="r">Pontos</div><div class="v tnum">${f0(p.total ?? p.pontos)}</div></div>
+      <div><div class="r">Média por round</div><div class="v tnum">${f0(p.pontos / p.n)}</div></div>
+      <div><div class="r">Distância mediana</div><div class="v tnum">${kms.length ? f0(d3.median(kms)) + " km" : NA}</div></div>
+    </div>
+    <div class="tabela-wrap" style="max-height:none"><table id="tab-partida"></table></div>
+    <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap"><button class="btn primario" id="ver-no-mapa">Ver no mapa grande</button></div>`;
+  el.querySelector("#ant").onclick = () => abrirPartida(lista2[i - 1].id);
+  el.querySelector("#prox").onclick = () => abrirPartida(lista2[i + 1].id);
+  el.querySelector("#ver-no-mapa").onclick = () => { estado.sel = new Set([p.id]); location.hash = "#mapa"; };
+  desenharMapa(el.querySelector("#mapa-partida"), p.rs, { focado: true, numerar: true, camada: "rounds", linhas: true });
+  const sn = v => v === "Sim" ? ["✓ Sim", "ok"] : v === "Não" ? ["✗ Não", "no"] : v ? [v, ""] : [NA, ""];
+  const duelo = p.grupo === "Duelo";
+  tabelaSimples(el.querySelector("#tab-partida"),
+    ["Round", "País real", "Meu palpite", "Km", "Pontos", "País certo", ...(duelo ? ["Oponente", "Ganhei o round"] : ["Tempo"])],
+    p.rs.map(r => [[r.round, "n"], `${r.pais}${r.regiao ? " (" + r.regiao + ")" : ""}`, `${r.ppais || NA}${r.pregiao ? " (" + r.pregiao + ")" : ""}`,
+      [r.km != null ? f0(r.km) : NA, "n"], [f0(r.pontos), "n"], sn(r.acertou ? "Sim" : "Não"),
+      ...(duelo ? [[r.pontosOp != null ? f0(r.pontosOp) : NA, "n"], sn(r.ganhouRound)] : [[r.tempo != null ? r.tempo + " s" : NA, "n"]])]));
+}
+
+// ===========================================================================
+// Página ERROS
+// ===========================================================================
+document.querySelectorAll("#abas-erros .aba").forEach(b => b.onclick = () => { location.hash = "#erros/" + b.dataset.aba; });
+function paginaErros(rs) {
+  document.querySelectorAll("#abas-erros .aba").forEach(b => b.setAttribute("aria-selected", String(b.dataset.aba === ui.aba)));
+  const el = document.getElementById("erros-conteudo"); el.replaceChildren();
+  if (!rs.length) { el.innerHTML = `<div class="card">${vazioHTML("Sem rounds no filtro.")}</div>`; return; }
+  ({ confusoes: abaConfusoes, paises: abaPaises, regioes: abaRegioes, distancia: abaDistancia })[ui.aba](el, rs);
+}
+function card(el, titulo, sub, d) {
+  const c = document.createElement("div"); c.className = "card";
+  c.innerHTML = `<h2>${d ? doodle(d) : ""}${titulo}</h2>${sub ? `<div class="sub">${sub}</div>` : ""}`;
+  el.appendChild(c); return c;
+}
+function linhaRanking(alvo, { nome, sub, frac, num, aoClicar, dica }) {
+  const d = document.createElement("div"); d.className = "rk";
+  d.innerHTML = `<div class="nome">${nome}${sub ? `<small>${sub}</small>` : ""}</div>
+    <div class="trilho"><b style="width:${Math.max(frac > 0 ? 2 : 0, frac * 100)}%"></b></div><div class="num tnum">${num}</div>`;
+  if (aoClicar) d.onclick = aoClicar; else d.style.cursor = "default";
+  if (dica) { d.onpointermove = ev => mostrar(ev, dica); d.onpointerleave = esconder; }
+  alvo.appendChild(d);
+}
+function abaConfusoes(el, rs) {
+  const grade = document.createElement("div"); grade.className = "grade-2"; el.appendChild(grade);
+  const erros = rs.filter(r => !r.acertou && r.ppais);
+  const dados = d3.rollups(erros, v => ({ n: v.length, km: d3.mean(v, r => r.km), pts: d3.mean(v, r => r.pontos) }), r => r.pais, r => r.ppais)
+    .flatMap(([pais, xs]) => xs.map(([pp, o]) => ({ pais, pp, ...o }))).sort((a, b) => b.n - a.n || a.km - b.km);
+  const idx = new Map(dados.map(d => [d.pais + "|" + d.pp, d.n]));
+  const c1 = card(grade, "Pares que você confunde", `${f0(erros.length)} rounds com o país errado. Clique num par para ver os rounds daquele país no mapa.`, "setas");
+  const r1 = document.createElement("div"); r1.className = "ranking"; c1.appendChild(r1);
+  const max = dados[0]?.n || 1;
+  if (!dados.length) r1.innerHTML = vazioHTML("Nenhum erro de país no filtro.", "trofeu");
+  for (const d of dados.slice(0, 25)) {
+    const volta = idx.get(d.pp + "|" + d.pais);
+    linhaRanking(r1, { nome: `${esc(d.pais)} → ${esc(d.pp)}`, sub: volta ? `e ${volta}× ao contrário` : "", frac: d.n / max,
+      num: `<b>${d.n}×</b> · ${d.km != null ? f0(d.km) + " km" : NA}`,
+      dica: [[`Era ${d.pais}, chutei ${d.pp}`], [`${d.n} vezes · ${d.km != null ? f0(d.km) : NA} km em média · ${f0(d.pts)} pontos em média`, "m"]],
+      aoClicar: () => { esconder(); ui.camada = "rounds"; filtrar("pais", [d.pais]); location.hash = "#mapa"; } });
+  }
+  // Países que mais recebem chute errado
+  const c2 = card(grade, "Para onde vão os chutes errados", "País do palpite nos rounds com o país errado.", "aviao");
+  const r2 = document.createElement("div"); r2.className = "ranking"; c2.appendChild(r2);
+  const alvos = d3.rollups(erros, v => ({ n: v.length, de: [...d3.rollup(v, x => x.length, r => r.pais)].sort((a, b) => b[1] - a[1]) }), r => r.ppais)
+    .map(([pp, o]) => ({ pp, ...o })).sort((a, b) => b.n - a.n);
+  const max2 = alvos[0]?.n || 1;
+  for (const d of alvos.slice(0, 15)) linhaRanking(r2, { nome: esc(d.pp), sub: "era " + d.de.slice(0, 3).map(([p, n]) => `${esc(p)} (${n})`).join(", "),
+    frac: d.n / max2, num: `<b>${d.n}×</b>` });
+}
+function abaPaises(el, rs) {
+  const c = card(el, "Acerto por país real", "Clique num país para filtrar só ele.", "bandeira");
+  const ord = document.createElement("div"); ord.className = "ordem";
+  ord.innerHTML = `<span class="dica">Ordenar por</span><div class="segmento">` +
+    [["perdidos", "Pontos perdidos"], ["pior", "Pior acerto"], ["melhor", "Melhor acerto"], ["n", "Mais rounds"]]
+      .map(([v, t]) => `<button data-v="${v}" aria-pressed="${ui.ordemPaises === v}">${t}</button>`).join("") + `</div>
+    <span class="dica">${ui.ordemPaises === "pior" || ui.ordemPaises === "melhor" ? "Só países com 3 rounds ou mais." : ""}</span>`;
+  ord.querySelectorAll("button").forEach(b => b.onclick = () => { ui.ordemPaises = b.dataset.v; atualizar(); });
+  c.appendChild(ord);
+  let dados = d3.rollups(rs, v => ({ n: v.length, ok: d3.sum(v, r => r.acertou), perdidos: d3.sum(v, r => 5000 - r.pontos),
+    km: d3.median(v.map(r => r.km).filter(x => x != null)) }), r => r.pais).map(([pais, o]) => ({ pais, ...o, p: o.ok / o.n }));
+  const o = ui.ordemPaises;
+  if (o === "pior" || o === "melhor") dados = dados.filter(d => d.n >= 3);
+  dados.sort(o === "perdidos" ? (a, b) => b.perdidos - a.perdidos : o === "pior" ? (a, b) => a.p - b.p || b.n - a.n
+    : o === "melhor" ? (a, b) => b.p - a.p || b.n - a.n : (a, b) => b.n - a.n);
+  const r = document.createElement("div"); r.className = "ranking"; c.appendChild(r);
+  const maxPerd = d3.max(dados, d => d.perdidos) || 1, maxN = d3.max(dados, d => d.n) || 1;
+  for (const d of dados.slice(0, 40)) {
+    const frac = o === "perdidos" ? d.perdidos / maxPerd : o === "n" ? d.n / maxN : d.p;
+    const num = o === "perdidos" ? `<b>${f0(d.perdidos)}</b> pts · ${fpct(d.p)}` : o === "n" ? `<b>${d.n}</b> rounds · ${fpct(d.p)}` : `<b>${fpct(d.p)}</b> · ${d.ok}/${d.n}`;
+    linhaRanking(r, { nome: esc(d.pais), sub: `${d.n} rounds · km mediano ${d.km != null ? f0(d.km) : NA}`, frac, num,
+      dica: [[d.pais], [`${d.ok} de ${d.n} com o país certo (${fpct(d.p)})`], [`${f0(d.perdidos)} pontos perdidos · ${f0(d.perdidos / d.n)} por round`, "m"]],
+      aoClicar: () => { esconder(); ui.camada = "rounds"; filtrar("pais", [d.pais]); location.hash = "#mapa"; } });
+  }
+}
+const SETORES = [["NO", "N", "NE"], ["O", "C", "L"], ["SO", "S", "SE"]];
+function abaRegioes(el, rs) {
+  const grade = document.createElement("div"); grade.className = "grade-2"; el.appendChild(grade);
+  const base = rs.filter(r => regiaoCerta(r) != null);
+  const c = card(grade, "Bússola do setor certo", `Só os ${f0(base.length)} rounds em que o país estava certo. Cada casa é o setor real do local, em relação ao centro do país; a cor é quanto você acertou o setor.`, "bussola");
+  const bus = document.createElement("div"); bus.className = "bussola"; c.appendChild(bus);
+  const por = d3.rollup(base, v => ({ n: v.length, ok: d3.sum(v, regiaoCerta) }), r => r.regiao);
+  for (const s of SETORES.flat()) {
+    const o = por.get(s), p = o ? o.ok / o.n : null;
+    const d = document.createElement("div");
+    const cor = p == null ? "var(--grid)" : corAcerto(p), escuro = p != null && p >= 0.5;
+    d.style.background = cor; d.style.color = escuro ? "#fff" : "var(--ink)";
+    d.innerHTML = `<span class="s">${s}</span><span class="p tnum">${p == null ? NA : fpct(p)}</span><span class="q tnum">${o ? `${o.ok}/${o.n}` : "sem rounds"}</span>`;
+    if (o) { d.onpointermove = ev => mostrar(ev, [[`Setor ${s}`], [`${o.ok} de ${o.n} rounds com o setor certo`], ["mesmo país, setor do palpite igual ao do local", "m"]]); d.onpointerleave = esconder; }
+    bus.appendChild(d);
+  }
+  const leg = document.createElement("div"); leg.className = "legenda"; leg.style.cssText = "justify-content:center;margin-top:10px";
+  leg.innerHTML = `<span>setor certo <span class="rampa">${RAMPA.map(c => `<b style="background:${c}"></b>`).join("")}</span> 0% a 100%</span>`;
+  c.appendChild(leg);
+  const c2 = card(grade, "País certo, setor errado", "Países com 3 rounds ou mais de país certo, do pior para o melhor setor.", "pino");
+  const r = document.createElement("div"); r.className = "ranking"; c2.appendChild(r);
+  const dados = d3.rollups(base, v => ({ n: v.length, ok: d3.sum(v, regiaoCerta) }), r => r.pais).map(([pais, o]) => ({ pais, ...o, p: o.ok / o.n }))
+    .filter(d => d.n >= 3).sort((a, b) => a.p - b.p || b.n - a.n);
+  if (!dados.length) r.innerHTML = vazioHTML("Poucos rounds para comparar.", "bussola");
+  for (const d of dados.slice(0, 20)) linhaRanking(r, { nome: esc(d.pais), sub: `${d.n} rounds com o país certo`, frac: d.p,
+    num: `<b>${fpct(d.p)}</b> · ${d.ok}/${d.n}`, aoClicar: () => { esconder(); ui.camada = "rounds"; filtrar("pais", [d.pais]); location.hash = "#mapa"; } });
+}
+const FAIXAS = [[0, 25, "até 25 km"], [25, 100, "25 a 100"], [100, 250, "100 a 250"], [250, 500, "250 a 500"],
+  [500, 1000, "500 a 1.000"], [1000, 2500, "1.000 a 2.500"], [2500, Infinity, "mais de 2.500"]];
+function abaDistancia(el, rs) {
+  const grade = document.createElement("div"); grade.className = "grade-2"; el.appendChild(grade);
+  const com = rs.filter(r => r.km != null);
+  const c = card(grade, "Distância do palpite", `${f0(com.length)} rounds com palpite. Cada barra é uma faixa de distância.`, "regua");
+  const dados = FAIXAS.map(([a, b, rot]) => { const v = com.filter(r => r.km >= a && r.km < b);
+    return { rot, n: v.length, pts: v.length ? d3.mean(v, r => r.pontos) : null, ok: v.length ? d3.mean(v, r => r.acertou) : null }; });
+  barrasVerticais(c, dados, d => d.n, d => d.rot, d => [[d.rot + " km"], [`${d.n} rounds (${fpct(d.n / (com.length || 1))})`],
+    [d.pts != null ? `${f0(d.pts)} pontos em média · ${fpct(d.ok)} com o país certo` : "", "m"]]);
+  const c2 = card(grade, "Distância mediana por modo e jogo", "Metade dos palpites caiu mais perto que isso.", "camera");
+  const r = document.createElement("div"); r.className = "ranking"; c2.appendChild(r);
+  const grupos = [...d3.rollups(com, v => ({ n: v.length, km: d3.median(v, r => r.km) }), r => r.modo).map(([k, o]) => ({ k: "Modo " + k, ...o })),
+    ...d3.rollups(com, v => ({ n: v.length, km: d3.median(v, r => r.km) }), r => r.jogo).map(([k, o]) => ({ k, ...o }))].filter(d => d.n >= 5);
+  const max = d3.max(grupos, d => d.km) || 1;
+  for (const d of grupos) linhaRanking(r, { nome: esc(d.k), sub: `${d.n} rounds`, frac: d.km / max, num: `<b>${f0(d.km)}</b> km` });
+}
+function barrasVerticais(alvo, dados, val, rot, dica) {
+  const div = document.createElement("div"); div.className = "grafico"; alvo.appendChild(div);
+  const Wg = 520, Hg = 240, M = { t: 18, r: 8, b: 34, l: 8 };
+  const x = d3.scaleBand(dados.map(rot), [M.l, Wg - M.r]).padding(0.28);
+  const y = d3.scaleLinear([0, d3.max(dados, val) || 1], [Hg - M.b, M.t]).nice();
+  const svg = d3.select(div).append("svg").attr("viewBox", `0 0 ${Wg} ${Hg}`);
+  svg.append("g").attr("class", "grade").selectAll("line").data(y.ticks(4)).join("line").attr("x1", M.l).attr("x2", Wg - M.r).attr("y1", y).attr("y2", y);
+  const g = svg.append("g").selectAll("g").data(dados).join("g");
+  g.append("rect").attr("x", d => x(rot(d)) - 4).attr("width", x.bandwidth() + 8).attr("y", M.t).attr("height", Hg - M.b - M.t).attr("fill", "transparent");
+  g.append("path").attr("fill", "var(--barra)").attr("d", d => {
+    const w = x.bandwidth(), h = y(0) - y(val(d)), r = Math.min(4, h, w / 2), x0 = x(rot(d)), y0 = y(val(d));
+    if (h <= 0) return "";
+    return `M${x0},${y(0)}v${-(h - r)}a${r},${r} 0 0 1 ${r},${-r}h${w - 2 * r}a${r},${r} 0 0 1 ${r},${r}v${h - r}z`; });
+  g.append("text").attr("x", d => x(rot(d)) + x.bandwidth() / 2).attr("y", d => y(val(d)) - 5).attr("text-anchor", "middle")
+    .style("fill", "var(--ink-2)").style("font-weight", 700).text(d => val(d) ? f0(val(d)) : "");
+  g.append("text").attr("x", d => x(rot(d)) + x.bandwidth() / 2).attr("y", Hg - M.b + 16).attr("text-anchor", "middle").text(rot);
+  svg.append("line").attr("x1", M.l).attr("x2", Wg - M.r).attr("y1", y(0)).attr("y2", y(0)).attr("stroke", "var(--axis)");
+  g.on("pointermove", (ev, d) => mostrar(ev, dica(d))).on("pointerleave", esconder);
+}
+
+// ===========================================================================
+// Página EVOLUÇÃO
+// ===========================================================================
+function linhaGrafico(el, series, fmtY, dominioY) {
+  el.replaceChildren();
+  const pts = series.flatMap(s => s.pontos);
+  if (!pts.length) { el.innerHTML = vazioHTML("Sem dados no filtro.", "montanha"); return; }
+  const Wg = 520, Hg = 230, M = { t: 14, r: 64, b: 26, l: 44 };
+  const xs = [...new Set(pts.map(p => p.x))].sort((a, b) => a - b);
+  const x = d3.scalePoint(xs, [M.l + 10, Wg - M.r - 10]);
+  const y = d3.scaleLinear(dominioY || d3.extent(pts, p => p.y), [Hg - M.b, M.t]).nice();
+  const svg = d3.select(el).append("svg").attr("viewBox", `0 0 ${Wg} ${Hg}`);
+  svg.append("g").attr("class", "grade").selectAll("line").data(y.ticks(4)).join("line")
+    .attr("x1", M.l).attr("x2", Wg - M.r).attr("y1", y).attr("y2", y);
+  svg.append("g").selectAll("text").data(y.ticks(4)).join("text")
+    .attr("x", M.l - 6).attr("y", d => y(d) + 4).attr("text-anchor", "end").text(fmtY);
+  const passo = Math.ceil(xs.length / 6);
+  svg.append("g").selectAll("text").data(xs.filter((d, i) => i % passo === 0)).join("text")
+    .attr("x", x).attr("y", Hg - 8).attr("text-anchor", "middle").text(d => series.rotulo(d));
+  const raio = xs.length > 40 ? 2.5 : 4;
+  const rotulos = [];
+  for (const s of series) {
+    if (!s.pontos.length) continue;
+    svg.append("path").datum(s.pontos).attr("fill", "none").attr("stroke", s.cor).attr("stroke-width", 2)
+      .attr("stroke-linejoin", "round").attr("stroke-linecap", "round").attr("d", d3.line(p => x(p.x), p => y(p.y)));
+    svg.append("g").selectAll("circle").data(s.pontos).join("circle")
+      .attr("cx", p => x(p.x)).attr("cy", p => y(p.y)).attr("r", raio).attr("fill", s.cor)
+      .attr("stroke", "#fff").attr("stroke-width", raio > 3 ? 2 : 1);
+    if (series.length > 1) { const u = s.pontos.at(-1); rotulos.push({ x: x(u.x) + 8, y: y(u.y) + 4, t: s.curto }); }
+  }
+  // Rótulo direto no fim da linha, afastado do vizinho quando as linhas terminam perto
+  rotulos.sort((a, b) => a.y - b.y);
+  for (let i = 1; i < rotulos.length; i++) if (rotulos[i].y - rotulos[i - 1].y < 13) {
+    const meio = (rotulos[i].y + rotulos[i - 1].y) / 2; rotulos[i - 1].y = meio - 6.5; rotulos[i].y = meio + 6.5; }
+  for (const r of rotulos) svg.append("text").attr("x", r.x).attr("y", r.y).style("fill", "var(--ink-2)").style("font-weight", 700).text(r.t);
+  const cruz = svg.append("line").attr("y1", M.t).attr("y2", Hg - M.b).attr("stroke", "var(--axis)").style("opacity", 0);
+  svg.append("rect").attr("x", M.l).attr("y", 0).attr("width", Wg - M.l - M.r).attr("height", Hg).attr("fill", "transparent")
+    .on("pointermove", ev => {
+      const [mx] = d3.pointer(ev);
+      const alvo = xs.reduce((a, b) => Math.abs(x(b) - mx) < Math.abs(x(a) - mx) ? b : a);
+      cruz.attr("x1", x(alvo)).attr("x2", x(alvo)).style("opacity", 1);
+      mostrar(ev, [[series.rotuloLongo(alvo)], ...series.map(s => {
+        const p = s.pontos.find(q => q.x === alvo);
+        return [`${s.nome}: ${p ? fmtY(p.y) + (p.extra ? " · " + p.extra : "") : NA}`, "m"]; })]);
+    })
+    .on("pointerleave", () => { cruz.style("opacity", 0); esconder(); });
+}
+function passoTempo(rs) {
+  const ds = rs.map(r => r.data).sort();
+  const dias = ds.length ? (Date.parse(ds.at(-1)) - Date.parse(ds[0])) / 864e5 : 0;
+  const passo = dias > 240 ? "mês" : dias > 45 ? "semana" : "dia";
+  const chave = d => {
+    if (passo === "dia") return Date.parse(d);
+    const t = new Date(d + "T00:00:00Z");
+    if (passo === "mês") return Date.UTC(t.getUTCFullYear(), t.getUTCMonth(), 1);
+    return t.getTime() - ((t.getUTCDay() + 6) % 7) * 864e5;   // segunda-feira da semana
+  };
+  const op = passo === "mês" ? { timeZone: "UTC", month: "short", year: "2-digit" } : { timeZone: "UTC", day: "2-digit", month: "2-digit" };
+  return { passo, chave, rotulo: t => new Date(t).toLocaleDateString("pt-BR", op),
+    rotuloLongo: t => (passo === "semana" ? "Semana de " : "") + new Date(t).toLocaleDateString("pt-BR", passo === "mês" ? { timeZone: "UTC", month: "long", year: "numeric" } : { timeZone: "UTC" }) };
+}
+function paginaEvolucao(rs) {
+  const tp = passoTempo(rs);
+  const serie = (grupo, f) => d3.rollups(rs.filter(r => r.grupo === grupo), v => ({ y: f(v), n: v.length }), r => tp.chave(r.data))
+    .map(([x, o]) => ({ x, y: o.y, extra: `${o.n} rounds` })).sort((a, b) => a.x - b.x);
+  const duas = f => { const s = [{ nome: "Duelos", curto: "Duelos", cor: "var(--s1)", pontos: serie("Duelo", f) },
+    { nome: "Clássicos e desafios", curto: "Clássicos", cor: "var(--s2)", pontos: serie("Clássico", f) }];
+    s.rotulo = tp.rotulo; s.rotuloLongo = tp.rotuloLongo; return s; };
+  document.getElementById("evo-pontos-t").textContent = `Média de pontos por round, por ${tp.passo}`;
+  document.getElementById("evo-acerto-t").textContent = `Acerto de país, por ${tp.passo}`;
+  linhaGrafico(document.getElementById("evo-pontos"), duas(v => d3.mean(v, r => r.pontos)), f0, [0, 5000]);
+  linhaGrafico(document.getElementById("evo-acerto"), duas(v => d3.mean(v, r => r.acertou)), fpct, [0, 1]);
+  const ds = d3.groups(rs.filter(r => r.grupo === "Duelo" && r.tipo === "Ranqueado" && r.formato === "1v1" && r.rating != null), r => r.id).map(([, v]) => v[0]);
+  const sr = [{ nome: "Rating", cor: "var(--barra)", pontos: ds.map((d, i) => ({ x: i + 1, y: d.rating,
+    extra: `${d.nome} · ${d.ganhouJogo === "Sim" ? "vitória" : "derrota"}` })) }];
+  sr.rotulo = n => "#" + n; sr.rotuloLongo = n => "Duelo ranqueado #" + n;
+  linhaGrafico(document.getElementById("evo-rating"), sr, f0);
+  const vol = d3.rollups(rs, v => v.length, r => tp.chave(r.data)).sort((a, b) => a[0] - b[0]);
+  document.getElementById("evo-volume-sub").textContent = `Rounds por ${tp.passo}, todos os jogos juntos.`;
+  const el = document.getElementById("evo-volume"); el.replaceChildren();
+  if (!vol.length) { el.innerHTML = vazioHTML("Sem dados no filtro.", "montanha"); return; }
+  // Rótulo curto no eixo ("out/25"), para caber embaixo de cada barra
+  barrasVerticais(el, vol.map(([x, n]) => ({ x, n, rot: tp.rotulo(x).replace(/\.? de /, "/").replace(".", "") })), d => d.n, d => d.rot,
+    d => [[tp.rotuloLongo(d.x)], [`${d.n} rounds`, "m"]]);
+  // Muitos períodos: esconde parte dos rótulos do eixo
+  const textos = el.querySelectorAll("svg > g:nth-of-type(2) > g > text:last-of-type");
+  if (vol.length > 12) textos.forEach((t, i) => { if (i % Math.ceil(vol.length / 8)) t.textContent = ""; });
+  if (vol.length > 20) el.querySelectorAll("svg > g:nth-of-type(2) > g > text:first-of-type").forEach(t => t.textContent = "");
+}
+
+// ===========================================================================
+// Página ROUNDS
+// ===========================================================================
+function tabelaSimples(el, cab, linhas) {
+  el.replaceChildren();
+  const tr = el.createTHead().insertRow();
+  cab.forEach(c => { const th = document.createElement("th"); th.textContent = c; th.style.cursor = "default"; tr.appendChild(th); });
+  const tb = el.createTBody();
+  for (const l of linhas) { const r = tb.insertRow();
+    for (const c of l) { const td = r.insertCell(); const [v, cls] = Array.isArray(c) ? c : [c, ""];
+      td.textContent = v == null ? NA : v; if (cls) td.className = cls; } }
+}
+const COLS = [
+  ["Data", r => r.data + r.hora, r => `${dataBR(r.data)} ${r.hora}`],
+  ["Partida", r => r.nome, r => r.nome],
+  ["Round", r => r.round, r => r.round, "n"],
+  ["Jogo", r => r.jogo, r => r.jogo], ["Modo", r => r.modo, r => r.modo], ["Mapa", r => r.mapa, r => r.mapa],
+  ["País", r => r.pais, r => r.pais + (r.regiao ? ` (${r.regiao})` : "")],
+  ["Palpite", r => r.ppais || "", r => (r.ppais || NA) + (r.pregiao ? ` (${r.pregiao})` : "")],
+  ["Km", r => r.km ?? -1, r => r.km != null ? f1(r.km) : NA, "n"],
+  ["Pontos", r => r.pontos, r => f0(r.pontos), "n"],
+  ["País certo", r => +r.acertou, r => r.acertou ? "✓ Sim" : "✗ Não", r => r.acertou ? "ok" : "no"],
+  ["Setor certo", r => regiaoCerta(r) == null ? -1 : +regiaoCerta(r), r => regiaoCerta(r) == null ? NA : regiaoCerta(r) ? "✓ Sim" : "✗ Não", r => regiaoCerta(r) == null ? "" : regiaoCerta(r) ? "ok" : "no"],
+  ["Ganhei o jogo", r => r.ganhouJogo || "", r => r.grupo === "Duelo" ? (r.ganhouJogo === "Sim" ? "✓ Sim" : "✗ " + (r.ganhouJogo || NA)) : NA, r => r.grupo !== "Duelo" ? "" : r.ganhouJogo === "Sim" ? "ok" : "no"]
+];
+const buscaRounds = document.getElementById("rounds-busca");
+buscaRounds.oninput = () => atualizar();
+function paginaRounds(rs) {
+  const q = buscaRounds.value.trim().toLowerCase();
+  let ls = q ? rs.filter(r => q.split(/\s+/).every(t => `${r.nome} ${r.pais} ${r.ppais} ${r.mapa} ${r.jogo} ${r.modo} ${dataBR(r.data)}`.toLowerCase().includes(t))) : rs.slice();
+  const { col, dir } = ui.ordemRounds, chave = COLS[col][1];
+  ls.sort((a, b) => { const x = chave(a), y = chave(b); return (x < y ? -1 : x > y ? 1 : a.round - b.round) * dir; });
+  document.getElementById("tabela-sub").textContent = `${f0(ls.length)} rounds. Clique no cabeçalho para ordenar e numa linha para abrir a partida.`;
+  const el = document.getElementById("tabela"); el.replaceChildren();
+  const tr = el.createTHead().insertRow();
+  COLS.forEach(([nome, , , cls], i) => { const th = document.createElement("th"); if (cls === "n") th.className = "n";
+    th.innerHTML = esc(nome) + (i === col ? ` <span class="ord">${dir > 0 ? "▲" : "▼"}</span>` : "");
+    th.onclick = () => { ui.ordemRounds = { col: i, dir: i === col ? -dir : (i === 0 ? -1 : 1) }; atualizar(); };
+    tr.appendChild(th); });
+  const tb = el.createTBody();
+  if (!ls.length) { const td = tb.insertRow().insertCell(); td.colSpan = COLS.length; td.innerHTML = vazioHTML("Nada no filtro."); return; }
+  const frag = document.createDocumentFragment();
+  for (const r of ls) { const row = document.createElement("tr"); row.className = "clicavel";
+    for (const [, , txt, cls] of COLS) { const td = document.createElement("td"); td.textContent = txt(r);
+      const c = typeof cls === "function" ? cls(r) : cls; if (c) td.className = c; row.appendChild(td); }
+    row.onclick = () => { ui.aberta = r.id; location.hash = "#partidas/" + r.id; };
+    frag.appendChild(row); }
+  tb.appendChild(frag);
+}
+
+// ===========================================================================
+// Navegação e atualização
+// ===========================================================================
+const PAGINAS = {
+  mapa: ["Mapa", "Onde caem os rounds e para onde vão os palpites."],
+  partidas: ["Partidas", "Cada jogo com seus rounds, do mais novo para o mais antigo."],
+  erros: ["Erros", "Onde e como você erra, para saber o que estudar."],
+  evolucao: ["Evolução", "Como os pontos, o acerto e o rating andam no tempo."],
+  rounds: ["Rounds", "A tabela de todos os rounds, para conferir e ordenar."]
+};
+function lerHash() {
+  const [pag, sub] = location.hash.replace(/^#/, "").split("/");
+  ui.pagina = PAGINAS[pag] ? pag : "mapa";
+  if (ui.pagina === "erros" && sub && ["confusoes", "paises", "regioes", "distancia"].includes(sub)) ui.aba = sub;
+  if (ui.pagina === "partidas" && sub && partidaPorId.has(sub)) ui.aberta = sub;
+}
+window.addEventListener("hashchange", () => { lerHash(); fecharPop(); atualizar(); window.scrollTo({ top: 0 }); });
+
+function atualizar() {
+  salvar();
+  const ps = partidasFiltradas();
+  const rs = roundsVisiveis(ps);
+  desenharFiltros(ps);
+  if (popRender && pop.classList.contains("aberto")) {
+    // Reencontra a pílula redesenhada para o popover continuar preso a ela
+    const nome = popAncora?.firstChild?.textContent?.trim();
+    const nova = [...document.querySelectorAll("#filtros .pilula, #filtros .segmento button")].find(b => b.firstChild?.textContent?.trim() === nome);
+    if (nova) popAncora = nova;
+    popRender(); posicionarPop();
+  }
+  document.querySelectorAll(".nav a").forEach(a => a.toggleAttribute("aria-current", false) || (a.dataset.pag === ui.pagina && a.setAttribute("aria-current", "page")));
+  document.querySelectorAll("[data-pagina]").forEach(s => s.hidden = s.dataset.pagina !== ui.pagina);
+  document.getElementById("qtd-partidas").textContent = f0(ps.length);
+  document.getElementById("qtd-rounds").textContent = f0(roundsDe(ps).length);
+  const [t, s] = PAGINAS[ui.pagina];
+  document.getElementById("titulo-pagina").textContent = t;
+  document.getElementById("sub-pagina").textContent = s + ` ${f0(partidasTodas.length)} partidas de ${dataBR(datas[0])} a ${dataBR(datas.at(-1))}.`;
+  document.getElementById("icone-pagina").innerHTML = doodle(DOODLE_PAGINA[ui.pagina]);
+  document.title = `${t} · FabGuessr`;
+  if (ui.pagina === "mapa") paginaMapa(ps, rs);
+  else if (ui.pagina === "partidas") paginaPartidas(ps);
+  else if (ui.pagina === "erros") paginaErros(rs);
+  else if (ui.pagina === "evolucao") paginaEvolucao(rs);
+  else paginaRounds(rs);
+}
+lerHash();
+estado.sel = new Set(ultimas5(partidasFiltradas()));
+atualizar();
+carregarMundo().then(atualizar);
+</script>
+</body>
+</html>
